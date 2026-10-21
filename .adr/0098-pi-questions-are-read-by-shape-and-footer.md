@@ -142,3 +142,47 @@ the one pointer, read up from it. A header row indented deeper than one space co
 selector's blank row stands over the list and a row one space in stands between the two. Every other
 header row is still blank or one space in, so an option cut off by a blank row, or a label wrapped
 back to column 1, still declines. The card's question holds the quoted command.
+
+## Amendment, 2026-10-21: an operator declares the frame their extensions draw
+
+Status: **Proposed** (2026-10-21). Amends the shape the reader takes, for screens whose frame an
+extension redraws. Trail: `frames.toml` (docs/configure.md, "Your own editor frame") ·
+`web/src/lib/frame-declarations.ts` · `web/src/lib/harness/pi/frames.ts` ·
+`web/src/lib/surface/frame-declarations.ts` · `pi--v130-frames-*.txt`. Tested on captures of pi 1.3.0
+under Herdr 0.9.5, and live on a two-machine crew.
+
+### Context
+
+pi extensions redraw the editor's frame, and each shape has come in as its own issue: no footer
+(445), no status row under a dialog (455), an extension's footer (485), an inset editor (544). A
+further common one is the frame of a pi-vim and status-footer setup: a context gauge painted into both
+rules in `━`, a mode label at the bottom rule's end (`──── INSERT`), and six indented footer rows with a
+widget row and a blank row over them. The reader finds no editor there, so every send needs Type here
+and every question shows only the Escape card. A reader that guessed such shapes would also take
+them from screens that only look like them, and a constant raised for one setup is raised for all.
+
+### Decision
+
+The operator declares the shape, and the reader takes it only from that declaration.
+
+- `frames.toml` names, per harness, the limits the reader may move: extra rule glyphs, a label at a
+  rule's ends, and the rows under the editor (how many,
+  how far in, how many blank). Nothing else moves: the rules keep one width and one colour, the frame
+  sits at the tail, and the rows under it are painted.
+- With no declaration every limit is the original constant, so the reader is byte for byte the
+  reader before this amendment. With the captured declaration every one of the 140 pi and OmO
+  captures before this amendment reads as it did (`pi/frames.test.ts`).
+- The bridge reads the file once at startup and applies it to its own reads: the `pi` surface
+  profile (`declareFrames`) and the readers its ask book runs. One bridge mirrors one machine, whose
+  extensions draw every box it reads.
+- The phone gets it on `/api/config`, and a crew member sends its own in `hello` (`frames`), which the
+  lead republishes on `?host=` and never replaces with its own. Absent is "nothing declared". It
+  rides `hello` for the reason the mux block does: it changes only when that bridge restarts.
+
+### Consequences
+
+A new extension shape needs a line of config, not a release, as long as it is one of these limits.
+A shape outside them (the inset editor of 544) still needs a reader. The surface code still names no
+harness: a declaration applies to the profile whose id is its key. A declaration that is wrong for
+its screens costs that machine what it cost before, a send that needs Type here, because every check
+it does not name still holds.
