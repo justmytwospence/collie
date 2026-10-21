@@ -1,0 +1,28 @@
+# How your extensions draw an agent's input box. This file goes next to your `.env`; docs/configure.md,
+# under "Your own slash commands", names that directory for each kind of install. On a Herdr plugin:
+#   cp frames.toml.example "$(herdr plugin config-dir herdr.collie)/frames.toml"
+#
+# WHEN YOU NEED IT. Collie finds an agent's input box by the shape the agent draws. An extension can
+# redraw that box: a gauge painted into its rules, a mode label at the end of a rule, a taller footer.
+# Then every send needs Type here, and a question shows only the Escape card. This file declares the
+# shape your extensions draw. pi is the only harness that reads one today.
+#
+# ONLY THESE LIMITS MOVE. Collie still wants the box's rules at the same width and in the same colour,
+# the box at the bottom of the screen, and the rows under it painted. Every key is optional; one you
+# leave out keeps pi's own shape. A key out of bounds is dropped with a line in the log.
+#
+# Collie reads this file once, at startup: run `collie restart` after an edit. In a crew each machine
+# reads its own and sends it to the lead, so each machine's panes are read with its own frame.
+
+[pi]
+# Glyphs a rule may be drawn with besides ─, for a gauge in the border. 1 to 8 box-drawing glyphs.
+rule_glyphs = "━"
+
+# "ends": a rule may carry a label before or after its run, such as ──── INSERT. pi's own: "middle".
+rule_labels = "ends"
+
+# Rows under the box's bottom rule (pi's own: 4, at most 16), how many columns in one may start
+# (pi's own: 0, at most 4), and blank rows between two of them (pi's own: 0, at most 2).
+status_rows = 12
+status_indent = 1
+status_blank_rows = 1

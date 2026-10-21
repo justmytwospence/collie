@@ -1,3 +1,4 @@
+import type { FrameDeclarations } from "../../web/src/lib/frame-declarations.ts";
 import { describe, expect, test } from "bun:test";
 
 import type { SnapshotView } from "../sessions.ts";
@@ -85,7 +86,7 @@ function lead(
   opts: {
     hello?: (
       link: CrewLink,
-    ) => Promise<PeerOutcome<{ readonly version: string | null; readonly mux?: MuxConfig | null; readonly surfaceVersion?: number }>>;
+    ) => Promise<PeerOutcome<{ readonly version: string | null; readonly mux?: MuxConfig | null; readonly surfaceVersion?: number; readonly frames?: FrameDeclarations }>>;
     turns?: UpdateTurns;
     proxy?: ForwardTransport;
   } = {},
@@ -1584,6 +1585,28 @@ describe("a member's capability block rides `hello` and is answered per host (M2
     await silent.lead.sweep();
     await Bun.sleep(5);
     expect(silent.lead.surfaceVersionFor("laptop")).toBeNull();
+  });
+
+  test("a member's frame declaration is kept from its hello, and a member that sends none has none", async () => {
+    const frames: FrameDeclarations = { pi: { ruleGlyphs: "━", statusRows: 8 } };
+    const answer = (sent: FrameDeclarations | undefined): PeerOutcome<{ version: string | null; mux: MuxConfig | null; frames?: FrameDeclarations }> => ({
+      ok: true,
+      value: sent === undefined ? { version: "1.24.0", mux: null } : { version: "1.24.0", mux: null, frames: sent },
+      status: 200,
+      member: "laptop",
+      receivedAt: NOW,
+      date: null,
+    });
+    const named = lead([member({ memberId: "laptop" })], () => ok(body), { hello: () => Promise.resolve(answer(frames)) });
+    expect(named.lead.framesFor("laptop")).toBeUndefined();
+    await named.lead.sweep();
+    await Bun.sleep(5);
+    expect(named.lead.framesFor("laptop")).toEqual(frames);
+    expect(named.lead.framesFor("nobody")).toBeUndefined();
+    const silent = lead([member({ memberId: "laptop" })], () => ok(body), { hello: () => Promise.resolve(answer(undefined)) });
+    await silent.lead.sweep();
+    await Bun.sleep(5);
+    expect(silent.lead.framesFor("laptop")).toBeUndefined();
   });
 
   test("the lead's forward hands a member's stored reader version to the refusal of a text reply (M56 compat)", async () => {

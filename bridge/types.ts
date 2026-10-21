@@ -1,6 +1,7 @@
 // Domain model for the bridge. These are OUR types, decoupled from Herdr's wire shapes
 // (which live only in mux/herdr/client.ts). The rest of the app talks in these terms.
 
+import type { FrameDeclarations } from "../web/src/lib/frame-declarations.ts";
 import type { HeldRow } from "../web/src/lib/surface/send.ts";
 import type { Surface } from "../web/src/lib/surface/surface.ts";
 import type { HoldNote } from "../web/src/lib/surface/hold.ts";
@@ -2198,6 +2199,13 @@ export interface BridgeConfig {
    * bridge resolved is ever echoed to a phone (ADR 0033).
    */
   operatorFonts?: OperatorFontRow[];
+  /**
+   * How the operator's extensions draw a harness's input box on THIS machine (`frames.toml`,
+   * web/src/lib/frame-declarations.ts), for the phone's harness readers of this machine's panes.
+   * Omitted when nothing is declared, which every reader takes as the harness's own frame. A `?host=`
+   * answer carries that member's own, from its `hello`, and never the lead's.
+   */
+  frames?: FrameDeclarations;
   /**
    * The multiplexer this collie drives, and what it can do. Absent only on a bridge older than
    * M10/06 — which a client reads as "every capability present", i.e. exactly today's Herdr app.

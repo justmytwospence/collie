@@ -8,16 +8,20 @@
 // Every reader below reads `piView(lines)`: the screen, or the screen cropped at OmO's side panel
 // (panel.ts). Rows keep their indices. A question read from a cropped view binds to the columns it
 // was read from (`bindColumns`); the editor beside the panel binds nothing.
+//
+// The readers take the operator's frame declaration (frames.ts) when there is one: `piAdapterFor`
+// builds the adapter for it. `piAdapter` is pi's own frame, the one every pane gets by default.
 import { trimTrailingBlank, type Block, type StyledLine } from "../../blocks";
 import type { HarnessAdapter } from "../types";
 import { detectPiQuestion, piModalOnScreen, piQuestionBanner, type PiQuestion } from "./ask";
 import { composerDraft, composerPrompt, composerStatusLines, locateComposer } from "./composer";
+import { DEFAULT_PI_FRAMES, piFrames, type PiFrameDeclaration, type PiFrames } from "./frames";
 import { piView, type PiView } from "./panel";
 import { detectPiTrust } from "./trust";
 
-export function piBuildBlocks(lines: StyledLine[]): Block[] {
-  const view = piView(lines);
-  const question = boundQuestion(view);
+export function piBuildBlocks(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): Block[] {
+  const view = piView(lines, frames);
+  const question = boundQuestion(view, frames);
   if (question !== null) {
     const before = trimTrailingBlank(lines.slice(0, question.startLine));
     const blocks: Block[] = before.length > 0 ? [{ kind: "raw", lines: before }] : [];
@@ -41,7 +45,7 @@ export function piBuildBlocks(lines: StyledLine[]): Block[] {
   // The editor comes off the mirror only when it is the editor: a modal can fill the same rules with
   // rows the stock layout would accept (pi's `/model` picker opens with its `>` search row,
   // pi--v110-core-selector.txt), and the mirror must keep it.
-  const composer = ready(view.lines) ? locateComposer(view.lines) : null;
+  const composer = ready(view.lines, frames) ? locateComposer(view.lines, frames) : null;
   return [{ kind: "raw", lines: composer === null ? lines : trimTrailingBlank(lines.slice(0, composer.top)) }];
 }
 
@@ -52,49 +56,63 @@ export function piBuildBlocks(lines: StyledLine[]): Block[] {
  * question card takes the range: a Submit page beside the panel has no capture and stays raw with
  * the Escape card.
  */
-function boundQuestion(view: PiView): PiQuestion | null {
-  const question = detectPiQuestion(view.lines);
+function boundQuestion(view: PiView, frames: PiFrames): PiQuestion | null {
+  const question = detectPiQuestion(view.lines, frames);
   if (question === null || view.column === null) return question;
   if (question.kind !== "prompt-select") return null;
   return { ...question, model: { ...question.model, bindColumns: { start: 0, end: view.column } } };
 }
 
-/** The editor is on screen and no pi modal is: the only screen a reply may be typed into. A question's
- *  inline answer editor is not a place the phone types (.adr/0098), so it answers false. */
-function ready(view: StyledLine[]): boolean {
-  return locateComposer(view) !== null && !piModalOnScreen(view);
+/** The editor is on screen and no pi modal is: the only screen a reply may be typed into. A question's inline answer editor is not a place
+ *  the phone types (.adr/0098), so it answers false. */
+function ready(view: StyledLine[], frames: PiFrames): boolean {
+  return locateComposer(view, frames) !== null && !piModalOnScreen(view, frames);
 }
 
-function composerReady(lines: StyledLine[]): boolean {
-  return ready(piView(lines).lines);
-}
-
-/** The editor frame to bind a write to. None on a cropped view: the bridge matches whole screen rows,
- *  so the write goes out unbound, and the read-back still guards Enter. */
-function boundPrompt(lines: StyledLine[]): string | null {
-  const view = piView(lines);
-  return !view.cropped && ready(view.lines) ? composerPrompt(view.lines) : null;
+/** The pi adapter for one frame: pi's own, or the shape an operator declared (frames.ts). */
+function makePiAdapter(frames: PiFrames): HarnessAdapter {
+  const view = (lines: StyledLine[]) => piView(lines, frames);
+  return {
+    agent: "pi",
+    buildBlocks: (lines) => piBuildBlocks(lines, frames),
+    extractStatusLines: (lines) => composerStatusLines(view(lines).lines, frames),
+    extractInputDraft: (lines) => {
+      const shown = view(lines).lines;
+      return ready(shown, frames) ? composerDraft(shown, frames) : null;
+    },
+    composerReady: (lines) => ready(view(lines).lines, frames),
+    // The editor frame to bind a write to. None on a cropped view: the bridge matches whole screen
+    // rows, so the write goes out unbound, and the read-back still guards Enter.
+    composerPrompt: (lines) => {
+      const shown = view(lines);
+      return !shown.cropped && ready(shown.lines, frames) ? composerPrompt(shown.lines, frames) : null;
+    },
+    // The way out every pi question screen prints: `Esc to cancel` (stock question, pi--v0871-*),
+    // `Esc cancel` (stock questionnaire), `esc cancel` (OmO, pi--omo-v5130-*), `Esc to go back` and
+    // `esc discard` in the inline answer editors, and `Escape/Ctrl+C to cancel` on pi's own pickers
+    // (pi--v110-core-selector.txt). Offered by name: on an answer editor it steps back, it does not end
+    // the question.
+    cancelKey: "Escape",
+    // OmO's `? Question pending` banner over a ready editor: a cue in Chat, never a card (ask.ts).
+    questionPending: (lines) => piQuestionBanner(view(lines).lines, frames),
+    // The trust prompt ends at its bottom rule with no status rows under it, so it is not a pi frame.
+    modalOnScreen: (lines) => piModalOnScreen(view(lines).lines, frames) || detectPiTrust(lines) !== null,
+  };
 }
 
 /** Herdr reports stock pi and OmO as exactly `pi`; no prefix or executable-name inference. */
-export const piAdapter: HarnessAdapter = {
-  agent: "pi",
-  buildBlocks: piBuildBlocks,
-  extractStatusLines: (lines) => composerStatusLines(piView(lines).lines),
-  extractInputDraft: (lines) => {
-    const view = piView(lines).lines;
-    return ready(view) ? composerDraft(view) : null;
-  },
-  composerReady,
-  composerPrompt: boundPrompt,
-  // The way out every pi question screen prints: `Esc to cancel` (stock question, pi--v0871-*),
-  // `Esc cancel` (stock questionnaire), `esc cancel` (OmO, pi--omo-v5130-*), `Esc to go back` and
-  // `esc discard` in the inline answer editors, and `Escape/Ctrl+C to cancel` on pi's own pickers
-  // (pi--v110-core-selector.txt). Offered by name: on an answer editor it steps back, it does not end
-  // the question.
-  cancelKey: "Escape",
-  // OmO's `? Question pending` banner over a ready editor: a cue in Chat, never a card (ask.ts).
-  questionPending: (lines) => piQuestionBanner(piView(lines).lines),
-  // The trust prompt ends at its bottom rule with no status rows under it, so it is not a pi frame.
-  modalOnScreen: (lines) => piModalOnScreen(piView(lines).lines) || detectPiTrust(lines) !== null,
-};
+export const piAdapter: HarnessAdapter = makePiAdapter(DEFAULT_PI_FRAMES);
+
+const declared = new WeakMap<PiFrameDeclaration, HarnessAdapter>();
+
+/** The pi adapter for an operator's frame declaration, or `piAdapter` when there is none. One adapter
+ *  per declaration object, so a caller that holds the declaration gets the same adapter each time. */
+export function piAdapterFor(declaration: PiFrameDeclaration | undefined): HarnessAdapter {
+  if (declaration === undefined) return piAdapter;
+  let adapter = declared.get(declaration);
+  if (adapter === undefined) {
+    adapter = makePiAdapter(piFrames(declaration));
+    declared.set(declaration, adapter);
+  }
+  return adapter;
+}

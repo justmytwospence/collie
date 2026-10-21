@@ -45,6 +45,7 @@ import { graphemeSegmenter } from "../../env";
 import { displayWidth } from "../../text-width";
 import { openFrameTop } from "./ask";
 import { locateComposer, MAX_PICKER_HEADER_ROWS, ruleAbove, tailRule } from "./composer";
+import { DEFAULT_PI_FRAMES, type PiFrames } from "./frames";
 import { keyHintPairs, listDialogHint } from "./footer";
 
 /** How far up from the tail a sign is looked for: the reader's own bound on a dialog. */
@@ -67,7 +68,7 @@ export interface PiView {
 }
 
 /** The column OmO's side panel starts at, or null when no sign says it is there. */
-export function panelColumn(lines: StyledLine[]): number | null {
+export function panelColumn(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): number | null {
   const texts = lines.map((line) => lineText(line).trimEnd());
   // Sign (a): every width a rule run gives, with the rows that give it, nearest the tail first.
   const signs = new Map<number, number[]>();
@@ -77,8 +78,8 @@ export function panelColumn(lines: StyledLine[]): number | null {
     const width = displayWidth(m[1]!);
     signs.set(width, [...(signs.get(width) ?? []), r]);
   }
-  for (const [width, rows] of signs) if (anchored(lines, texts, width, rows)) return width;
-  return overrunColumn(lines, texts) ?? openColumn(lines, texts);
+  for (const [width, rows] of signs) if (anchored(lines, texts, width, rows, frames)) return width;
+  return overrunColumn(lines, texts, frames) ?? openColumn(lines, texts, frames);
 }
 
 /**
@@ -89,8 +90,8 @@ export function panelColumn(lines: StyledLine[]): number | null {
  * the run goes straight into text, or a row of the frame (or of a picker's header above it) is
  * padded to W and then carries text. Read off cuts of real captures (fixtures README, "derived").
  */
-function openColumn(lines: StyledLine[], texts: string[]): number | null {
-  if (tailRule(lines) !== null) return null;
+function openColumn(lines: StyledLine[], texts: string[], frames: PiFrames): number | null {
+  if (tailRule(lines, frames) !== null) return null;
   let end = texts.length - 1;
   while (end >= 0 && texts[end] === "") end--;
   for (let r = end; r >= 0 && end - r <= MAX_SCAN_ROWS; r--) {
@@ -102,9 +103,9 @@ function openColumn(lines: StyledLine[], texts: string[]): number | null {
     const from = Math.max(0, r - MAX_PICKER_HEADER_ROWS - 1);
     const cropped = lines.slice(from, end + 1).map((line) => cropLine(line, width));
     const croppedTexts = cropped.map((line) => lineText(line).trimEnd());
-    if (openFrameTop(cropped, croppedTexts, end - from) !== r - from) return null;
+    if (openFrameTop(cropped, croppedTexts, end - from, frames) !== r - from) return null;
     if (BARE_SIGN.test(texts[r]!)) return width;
-    const header = ruleAbove(croppedTexts, r - from, croppedTexts[r - from]!.length, MAX_PICKER_HEADER_ROWS + 1);
+    const header = ruleAbove(croppedTexts, r - from, croppedTexts[r - from]!.length, MAX_PICKER_HEADER_ROWS + 1, frames);
     for (let row = header < 0 ? r : header + from; row <= end; row++) {
       const value = texts[row]!;
       if (displayWidth(value) <= width) continue;
@@ -118,28 +119,28 @@ function openColumn(lines: StyledLine[], texts: string[]): number | null {
 
 /** Sign (a) holds at `width` only for the frame at the tail: its bottom rule's run on the screen is
  *  exactly `width` wide, and one of `rows` is a row of that frame. */
-function anchored(lines: StyledLine[], texts: string[], width: number, rows: number[]): boolean {
+function anchored(lines: StyledLine[], texts: string[], width: number, rows: number[], frames: PiFrames): boolean {
   const cropped = lines.map((line) => cropLine(line, width));
-  const tail = tailRule(cropped);
+  const tail = tailRule(cropped, frames);
   if (tail === null) return false;
   const run = RULE_RUN.exec(texts[tail.bottom]!);
   if (run === null || displayWidth(run[0]) !== width) return false;
   const croppedTexts = cropped.map((line) => lineText(line).trimEnd());
   const rule = croppedTexts[tail.bottom]!.length;
-  const top = ruleAbove(croppedTexts, tail.bottom, rule, MAX_SCAN_ROWS);
-  const header = top >= 0 && locateComposer(cropped) === null ? ruleAbove(croppedTexts, top, rule, MAX_PICKER_HEADER_ROWS + 1) : -1;
+  const top = ruleAbove(croppedTexts, tail.bottom, rule, MAX_SCAN_ROWS, frames);
+  const header = top >= 0 && locateComposer(cropped, frames) === null ? ruleAbove(croppedTexts, top, rule, MAX_PICKER_HEADER_ROWS + 1, frames) : -1;
   const start = header >= 0 ? header : top >= 0 ? top : tail.bottom;
   return rows.some((r) => r >= start && r < tail.end);
 }
 
 /** Sign (b): a row of the tail frame runs past the frame's rules. */
-function overrunColumn(lines: StyledLine[], texts: string[]): number | null {
-  const tail = tailRule(lines);
+function overrunColumn(lines: StyledLine[], texts: string[], frames: PiFrames): number | null {
+  const tail = tailRule(lines, frames);
   if (tail === null) return null;
   const rule = texts[tail.bottom]!;
-  const top = ruleAbove(texts, tail.bottom, rule.length, MAX_SCAN_ROWS);
+  const top = ruleAbove(texts, tail.bottom, rule.length, MAX_SCAN_ROWS, frames);
   if (top < 0) return null;
-  const header = locateComposer(lines) === null ? ruleAbove(texts, top, rule.length, MAX_PICKER_HEADER_ROWS + 1) : -1;
+  const header = locateComposer(lines, frames) === null ? ruleAbove(texts, top, rule.length, MAX_PICKER_HEADER_ROWS + 1, frames) : -1;
   const width = displayWidth(rule);
   for (let r = header < 0 ? top : header; r < tail.end; r++) {
     const row = texts[r]!;
@@ -215,8 +216,8 @@ export function cropLine(line: StyledLine, columns: number): StyledLine {
 
 /** What the pi readers read: the screen, or the screen cropped at OmO's side panel. Row indices are
  *  the screen's either way. */
-export function piView(lines: StyledLine[]): PiView {
-  const column = panelColumn(lines);
+export function piView(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): PiView {
+  const column = panelColumn(lines, frames);
   if (column === null) return { lines, cropped: false, column: null };
   return { lines: lines.map((line) => cropLine(line, column)), cropped: true, column };
 }

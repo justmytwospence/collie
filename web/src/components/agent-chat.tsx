@@ -124,6 +124,7 @@ import { useOptionalRootData } from "@/lib/route-data";
 import { hasJournalAdapter, reportsSessionOnFirstPrompt } from "@/lib/journal-agents";
 import { journalReadingOf, paneBody, type JournalReading } from "@/lib/chat-gate";
 import { paneRowKey, paneScope } from "@/lib/hosts";
+import { useFrames } from "@/lib/operator-config";
 import { isLead, paneScopeKey } from "@/lib/scope";
 import { answerRouteFor, textRouteFor } from "@/lib/send-path";
 import { useSessionCard, wearsExperimental } from "@/lib/session-cards";
@@ -762,10 +763,13 @@ export function AgentChat({
   // the agent, a menu is up, or no box at the tail, in which case the strip is hidden. A second parse
   // of `display`, but memoised on it, so it only recomputes when the buffer content changes — off the
   // render hot path.
+  // How this pane's machine draws its harness's input box, when its operator declared it
+  // (`frames.toml`): every reader below reads the pane with it, so they agree on where the box is.
+  const frames = useFrames(scope);
   const statusLines = useMemo(
     () =>
-      grammarsOn ? adapterFor(agent?.agent)?.extractStatusLines(splitLines(parseAnsi(display))) ?? [] : [],
-    [display, agent?.agent, grammarsOn],
+      grammarsOn ? adapterFor(agent?.agent, frames)?.extractStatusLines(splitLines(parseAnsi(display))) ?? [] : [],
+    [display, agent?.agent, grammarsOn, frames],
   );
   // Settings → Harness configurations: whether this device draws the lifted status line, and for
   // Claude Code the background-agents block under it, for THIS pane's harness (lib/harness-prefs.ts).
@@ -780,17 +784,17 @@ export function AgentChat({
   const agentsFooter = useMemo(
     () =>
       grammarsOn
-        ? adapterFor(agent?.agent)?.extractAgentsFooter?.(splitLines(parseAnsi(display))) ?? []
+        ? adapterFor(agent?.agent, frames)?.extractAgentsFooter?.(splitLines(parseAnsi(display))) ?? []
         : [],
-    [display, agent?.agent, grammarsOn],
+    [display, agent?.agent, grammarsOn, frames],
   );
 
   // A question waits in the terminal that no card can answer (OmO's `? Question pending` banner over a
   // ready editor, pi/ask.ts). Same parse source and adapter as the probes around it. Chat draws one
   // status line for it; the terminal view shows the banner itself, so nothing else reads this.
   const questionPending = useMemo(
-    () => grammarsOn && adapterFor(agent?.agent)?.questionPending?.(splitLines(parseAnsi(display))) === true,
-    [display, agent?.agent, grammarsOn],
+    () => grammarsOn && adapterFor(agent?.agent, frames)?.questionPending?.(splitLines(parseAnsi(display))) === true,
+    [display, agent?.agent, grammarsOn, frames],
   );
 
   // A user draft stranded on the input box's "❯" line — a message queued while the agent was busy
@@ -802,9 +806,9 @@ export function AgentChat({
   const rawTerminalDraft = useMemo(
     () =>
       grammarsOn
-        ? adapterFor(agent?.agent)?.extractInputDraft(splitLines(parseAnsi(display))) ?? null
+        ? adapterFor(agent?.agent, frames)?.extractInputDraft(splitLines(parseAnsi(display))) ?? null
         : null,
-    [display, agent?.agent, grammarsOn],
+    [display, agent?.agent, grammarsOn, frames],
   );
   // Is a dialog (prompt/wizard/preview/multi-select/menu) on screen right now? A block whose screen
   // owns the TUI's keyboard means the composer must refuse a free-text send: the text would be
@@ -837,8 +841,9 @@ export function AgentChat({
         agent: mirrorAgent,
         grammars: grammarsOn,
         nativeMirror: mirrorOverride,
+        frames,
       }),
-    [display, mirrorAgent, grammarsOn, mirrorOverride],
+    [display, mirrorAgent, grammarsOn, mirrorOverride, frames],
   );
   // Whether a card the mirror drew owns the keyboard. It no longer reaches the composer (M56 spec 06:
   // the composer reads the Surface only); it still keeps the queued-keys card and the dialog taps

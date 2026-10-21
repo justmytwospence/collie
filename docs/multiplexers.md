@@ -596,6 +596,8 @@ Collie checks that the character lands in the box, then removes it.
   So Collie sends with Alt+Enter, and with Ctrl+Q on Windows.
   pi shows a queued message as a `Follow-up:` row above the box.
   A box taller than 30 rows does not read as a box. The screen reads as unknown, and a send needs your tap.
+  An extension that redraws the box, with a gauge in its rules, a mode label or a taller footer,
+  needs `frames.toml` ([Your own editor frame](configure.md#your-own-editor-frame)).
 
 - **OMP** lets you choose the border style of its box, so Collie knows five of them.
   One is the open box with a status row on top. Others are a rule pair, a rule with no bottom rule,

@@ -314,6 +314,28 @@ header row and a body row, as the bridge types a message (a newline between them
 | `pi--v130-powerline-editor-walky-draft--w120.txt` | Derived: a walky talky header row and its body row | draft, modal none, header and body as one text |
 | `pi--v130-powerline-editor-slash-model--w120.txt` | `/model` typed, pi's command list under the box | draft `/model`, modal none, the list is the command's own (the profile's `commandList`) |
 | `pi--v130-powerline-model-selector--w120.txt` | pi's `/model` selector, which takes the editor's place in column zero | modal unreadable, never free; the pi reader's modal |
+## pi 1.3.0 under an operator's frame declaration (captured 2026-10-21, Herdr 0.9.5, derived)
+
+pi 1.3.0 with extensions that redraw the editor: a context gauge painted into both rules in `━`, a
+vim-style mode label (` INSERT ` on its own background) at the bottom rule's right end, and a footer of
+six painted rows one column in. A widget can stand under the editor, with one blank row before the
+footer. The fold and the readers read these with the declaration in each file's label in
+`surface-labels.json` (`frames`, as `frames.toml` declares it, docs/configure.md); with none, none of
+them reads as an editor. Read with `herdr pane read --source recent --format ansi` from working panes
+at 165 columns and cut to the final frame's top rule. DERIVED: the footer's folder and branch names
+and the draft were replaced with strings of the same length, so every column stands where it was
+read. The two `-sandbox-` captures are byte-faithful, from a throwaway pane; a gauge needs context, which
+only a model turn makes, so the gauge captures stay derived. No user, host or path is in any file.
+
+| Fixture | State | Reads as, with the declaration |
+| --- | --- | --- |
+| `pi--v130-frames-idle.txt` | Empty editor, gauge, ` INSERT `, six footer rows | composer, empty |
+| `pi--v130-frames-draft.txt` | A draft, typed and not sent | composer, draft read back |
+| `pi--v130-frames-widget.txt` | Empty editor, a widget row, a blank row, the footer | composer, empty |
+| `pi--v130-frames-sandbox-idle.txt` | CAPTURED in a sandbox pane (`/tmp/collie-sandbox`, a fresh session, no model turn): the `INSERT` label and the six-row footer, no gauge yet (0% context) | composer, empty |
+| `pi--v130-frames-sandbox-draft.txt` | The same pane with a draft typed by `herdr pane send-text`, not sent | composer, draft read back |
+| `pi--v130-frames-question.txt` | A single-select question whose top rule carries its title, a widget row under it | prompt-select, walked, with a free-text row |
+| `pi--v130-frames-question-moved.txt` | The same, after a real Down: the walk pair | prompt-select, the same dialog |
 
 ## pi's permission gate on pi 0.87.1 (captured 2026-10-17, Herdr 0.9.4)
 
