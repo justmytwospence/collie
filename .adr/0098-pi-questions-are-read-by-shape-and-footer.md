@@ -186,3 +186,24 @@ A shape outside them (the inset editor of 544) still needs a reader. The surface
 harness: a declaration applies to the profile whose id is its key. A declaration that is wrong for
 its screens costs that machine what it cost before, a send that needs Type here, because every check
 it does not name still holds.
+
+## Amendment, 2026-10-21: a lone checkbox question is lifted by its footer
+
+Status: **Proposed** (2026-10-21). Amends "Multi-select stays raw" in the Decision, for one shape.
+Trail: `web/src/lib/harness/pi/multi.ts`, `footer.ts` (`tabVerb`), `ASK_NOTES.md` ("Multi-select") ·
+`pi--v130-frames-multi*.txt`.
+
+The Consequences above wait for a published extension whose captures prove the keys. pi-plugins'
+`ask_user_question` is one, and its keys are not Space and Enter: a digit toggles its own row, and Tab
+commits a lone question. So the reader takes the recipe from the footer, as it does for every
+question, and names no extension:
+
+- A frame whose footer names `1-9 select`, `space toggle` (or `tick`), an Escape key, and a bare `tab`
+  that is `done` or `submit` is a checkbox question.
+- Only a lone question lifts: a strip of exactly one chip and `Submit`. It lifts as a `multi-select`
+  block with the `digit` recipe and the declared advance `Tab`, the shape opencode's lone question
+  already has (`advanceKeys`), so no new key path is added.
+- The last row, when it is `Other`, is the typed answer: never a button, and a ticked one keeps the
+  dialog raw, because Tab then asks for its text.
+- Everything else stays raw with the Escape card, as before.
+

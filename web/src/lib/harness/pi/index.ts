@@ -18,6 +18,7 @@ import { composerDraft, composerPrompt, composerStatusLines, locateComposer } fr
 import { DEFAULT_PI_FRAMES, piFrames, type PiFrameDeclaration, type PiFrames } from "./frames";
 import { piView, type PiView } from "./panel";
 import { detectPiTrust } from "./trust";
+import { detectPiMultiSelect } from "./multi";
 
 export function piBuildBlocks(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): Block[] {
   const view = piView(lines, frames);
@@ -32,6 +33,14 @@ export function piBuildBlocks(lines: StyledLine[], frames: PiFrames = DEFAULT_PI
         ? { kind: "prompt-select", prompt: question.model, lines: region }
         : { kind: "wizard", wizard: question.model, lines: region },
     );
+    return blocks;
+  }
+  // A checkbox question (multi.ts). Beside OmO's side panel it stays raw: nothing there binds whole rows.
+  const multi = view.column === null ? detectPiMultiSelect(view.lines, frames) : null;
+  if (multi !== null) {
+    const before = trimTrailingBlank(lines.slice(0, multi.startLine));
+    const blocks: Block[] = before.length > 0 ? [{ kind: "raw", lines: before }] : [];
+    blocks.push({ kind: "multi-select", multi: multi.model, lines: view.lines.slice(multi.startLine) });
     return blocks;
   }
   // The trust prompt fills the screen before any editor or side panel exists, so it is read whole.

@@ -336,6 +336,9 @@ only a model turn makes, so the gauge captures stay derived. No user, host or pa
 | `pi--v130-frames-sandbox-draft.txt` | The same pane with a draft typed by `herdr pane send-text`, not sent | composer, draft read back |
 | `pi--v130-frames-question.txt` | A single-select question whose top rule carries its title, a widget row under it | prompt-select, walked, with a free-text row |
 | `pi--v130-frames-question-moved.txt` | The same, after a real Down: the walk pair | prompt-select, the same dialog |
+| `pi--v130-frames-multi.txt` | A lone multiple choice: a strip, numbered rows with a tick column, the typed-answer row, a note | multi-select, digit toggles, Tab submits, `Other` not a button |
+| `pi--v130-frames-multi-checked.txt` | The same after a real `2`: Green ticked, the pointer on it | multi-select, Green checked |
+| `pi--v130-frames-multi-two.txt` | Then a real `3`: Blue ticked too | multi-select, two checked |
 
 ## pi's permission gate on pi 0.87.1 (captured 2026-10-17, Herdr 0.9.4)
 
