@@ -134,6 +134,20 @@ OmO's title row counts down (`Ask user · 30m`). `coreSignature` blanks that clo
 Chromium at the `iphone-14` preset). Chat drew the card with three option buttons and Cancel. With
 the pointer on Red, a tap on Green answered `Color: Green`.
 
+## A narrow pane (2026-10-21)
+
+A pane narrower than a dialog's key hint or one of its rows wraps them. Two shapes, both read in
+`ask.ts` and pinned in `narrow.test.ts` on the real narrow capture `pi--v0871-question-narrow.txt`:
+
+- A footer whose hints are two spaces apart (pi's own selector,
+  `↑↓ navigate  enter select  escape/ctrl+c cancel`) wrapped between two hints. Joined with one space,
+  `enter select escape/ctrl+c cancel` reads as one hint and the Escape it names is lost, so the question
+  stays raw. Both joins are read and the one with more hints wins; a hint split across the break does
+  not parse as two, so it falls back to the one-space join, as before.
+- A choice whose description stands on its own row behind a one-column gutter (` │    rest`), the way
+  pi-plugins' `ask_user_question` draws it so herdr-web-ui reads it too. The rest joins the choice; a
+  gutter row under the free-text row joins nothing.
+
 ## The editor
 
 Registering an adapter for `pi` moves every pi pane off the one-step send onto the guarded one

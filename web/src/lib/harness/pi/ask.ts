@@ -87,6 +87,8 @@ const UNNUMBERED_ROW = /^ ([→ ]) (\S.*)$/;
 const DESCRIPTION_ROW = /^ {4}(\S.*)$/;
 /** A title row indented deeper than one space: the command pi's permission gate quotes (`unnumberedStart`). */
 const QUOTED_ROW = /^ {2,}\S/;
+/** The wrapped rest of a choice behind a one-column gutter, one space in: ` │    rest`. */
+const GUTTER_ROW = /^ │ +(\S.*)$/;
 
 /** The frame every pi question screen shares: the two rules and the footer between them. */
 export interface PiFrame {
@@ -144,10 +146,31 @@ function footerAt(lines: StyledLine[], texts: string[], footerEnd: number): { st
     // A footer row is painted (dim or coloured) in every capture. A plain row is text someone typed,
     // such as a key hint quoted in a draft (pi/ask.test.ts, "quoted key hints").
     if (start <= 0 || !HEADER_ROW.test(texts[start]!) || !styledRow(lines[start]!)) break;
-    const footer = parsePiFooter(texts.slice(start, footerEnd + 1).map((t) => t.trim()).join(" "));
+    const rows = texts.slice(start, footerEnd + 1).map((t) => t.trim());
+    const footer = wrappedFooter(rows);
     if (footer !== null) best = { start, footer };
   }
   return best;
+}
+
+/**
+ * A footer read across the rows a narrow pane wrapped it onto. The terminal breaks a row between words,
+ * so the break is either inside one hint (`enter` / `select`) or between two (`… enter select` /
+ * `escape/ctrl+c cancel`). Joined with one space the second reads as one hint whose verb swallows the
+ * next key, and the Escape the footer names is lost. So both joins are read, and the one that parses
+ * into more hints wins: a hint split across the break does not parse as two, and falls back to one.
+ */
+function wrappedFooter(rows: string[]): PiFooter | null {
+  const joined = parsePiFooter(rows.join(" "));
+  if (rows.length < 2) return joined;
+  const apart = parsePiFooter(rows.join("  "));
+  if (apart === null) return joined;
+  if (joined === null) return apart;
+  return hintCount(apart.text) > hintCount(joined.text) ? apart : joined;
+}
+
+function hintCount(text: string): number {
+  return text.split(/\s+[•·]\s+|\s{2,}/).filter((s) => s.trim() !== "" && s.trim() !== "•").length;
 }
 
 /** Read the frame at the tail of `lines`, or null. Says nothing yet about what is inside it. A frame
@@ -559,6 +582,14 @@ function readOptions(
     }
     // A description row: exactly the label's column, under a choice (never under the free-text row).
     const owner = rows.at(-1);
+    // The wrapped rest of a choice behind a one-column gutter (` │    rest`): a select that keeps its
+    // description on the label's row draws it so, and herdr-web-ui reads it so too.
+    const gutter = GUTTER_ROW.exec(t);
+    if (gutter !== null && owner !== undefined && !owner.freeText) {
+      if (owner.description === undefined) owner.label = `${owner.label} ${gutter[1]!}`;
+      else owner.description = `${owner.description} ${gutter[1]!}`;
+      continue;
+    }
     const desc = new RegExp(`^ {${labelCol}}(\\S.*)$`).exec(t);
     if (desc !== null && owner !== undefined && !owner.freeText) {
       owner.description = owner.description === undefined ? desc[1]! : `${owner.description} ${desc[1]!}`;
