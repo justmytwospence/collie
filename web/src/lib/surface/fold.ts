@@ -38,6 +38,7 @@
 //
 // Pure: no DOM, no Bun API, no harness name. One log and one context always give one Surface.
 
+import { agentRegion } from "../split-panel";
 import { readCuesFor, runningSign, type CueRead } from "./cues";
 import { coveredFrame, findInputFrame, frameEdge, rowText, type Frame, type FrameRow, type IdleProfile } from "./frame";
 import { LOST_STOP_READS, LOST_STOP_SPAN_MS, SETTLE_MS, type EdgeKind } from "./edges";
@@ -220,7 +221,9 @@ export function surfaceOfScreen(input: ScreenInput, idle: IdleProfile | null): S
   if (input.rows === null) {
     return { surface: { revision: input.revision, turn: "unknown", modal: "unknown", composer: "unreachable" }, frame: null, cues: null };
   }
-  const rows = input.rows;
+  // A second panel the operator declared (`idle.splitPanels`) is not the harness's screen: the box is
+  // looked for, and every cue is read, in the region the divider leaves. Row indices stay the screen's.
+  const rows = agentRegion(input.rows, idle?.splitPanels);
   const found = idle === null ? null : findInputFrame(rows, idle);
   const cues = readCuesFor(rows, found, idle);
   // A dialog drawn in the box's place (`idle.dialogsInBox`) hides the box: the screen makes no claim about it.

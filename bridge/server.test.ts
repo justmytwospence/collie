@@ -221,6 +221,7 @@ function cfg(overrides: Partial<Config> = {}): Config {
     fontsDir: "/nope/fonts",
     launchersFile: "/nope/launchers.toml",
     cacheRulesFile: "/nope/cache-rules.toml",
+    framesFile: "/nope/frames.toml",
     trustedUser: "",
     trustedUserOptional: false,
     accessTeam: "",

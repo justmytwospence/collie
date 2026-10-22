@@ -42,9 +42,11 @@
 // Pure, no harness imports beyond the pi readers.
 import { lineText, type StyledLine } from "../../blocks";
 import { graphemeSegmenter } from "../../env";
+import { cutRowColumns, splitPanelView } from "../../split-panel";
 import { displayWidth } from "../../text-width";
 import { openFrameTop } from "./ask";
 import { locateComposer, MAX_PICKER_HEADER_ROWS, ruleAbove, tailRule } from "./composer";
+import { DEFAULT_PI_FRAMES, type PiFrames } from "./frames";
 import { keyHintPairs, listDialogHint } from "./footer";
 
 /** How far up from the tail a sign is looked for: the reader's own bound on a dialog. */
@@ -58,16 +60,22 @@ const PADDED_TO_EDGE = / {2}$/;
 const RULE_RUN = /^(?:─{2,} \S.*? ─{3,}|─+)/;
 
 export interface PiView {
-  /** The rows the readers see: cropped at the panel's column, or the screen as it is. */
+  /** The rows the readers see: cropped at a panel's column or cut above a panel's row, or the screen as it is. */
   lines: StyledLine[];
   /** True when the rows were cropped, so nothing read from them binds as whole screen rows. */
   cropped: boolean;
-  /** The panel's column, W, when `cropped`: every row was cut to its first W display columns. */
+  /** The panel's column, W, when cropped beside one: every row was cut to its first W display columns. */
   column: number | null;
+  /** The row of a declared panel drawn below, when the rows above it are all that is read: the bridge binds a
+   *  tapped region to the screen's last rows, and the panel stands there, so nothing is lifted from these rows. */
+  rows: number | null;
+  /** True when the cut is the operator's declared divider (lib/split-panel.ts), whose panel is not pi's screen
+   *  and so is not drawn in its mirror. OmO's own side panel is not: its rows keep their panel half. */
+  split: boolean;
 }
 
 /** The column OmO's side panel starts at, or null when no sign says it is there. */
-export function panelColumn(lines: StyledLine[]): number | null {
+export function panelColumn(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): number | null {
   const texts = lines.map((line) => lineText(line).trimEnd());
   // Sign (a): every width a rule run gives, with the rows that give it, nearest the tail first.
   const signs = new Map<number, number[]>();
@@ -77,8 +85,8 @@ export function panelColumn(lines: StyledLine[]): number | null {
     const width = displayWidth(m[1]!);
     signs.set(width, [...(signs.get(width) ?? []), r]);
   }
-  for (const [width, rows] of signs) if (anchored(lines, texts, width, rows)) return width;
-  return overrunColumn(lines, texts) ?? openColumn(lines, texts);
+  for (const [width, rows] of signs) if (anchored(lines, texts, width, rows, frames)) return width;
+  return overrunColumn(lines, texts, frames) ?? openColumn(lines, texts, frames);
 }
 
 /**
@@ -89,8 +97,8 @@ export function panelColumn(lines: StyledLine[]): number | null {
  * the run goes straight into text, or a row of the frame (or of a picker's header above it) is
  * padded to W and then carries text. Read off cuts of real captures (fixtures README, "derived").
  */
-function openColumn(lines: StyledLine[], texts: string[]): number | null {
-  if (tailRule(lines) !== null) return null;
+function openColumn(lines: StyledLine[], texts: string[], frames: PiFrames): number | null {
+  if (tailRule(lines, frames) !== null) return null;
   let end = texts.length - 1;
   while (end >= 0 && texts[end] === "") end--;
   for (let r = end; r >= 0 && end - r <= MAX_SCAN_ROWS; r--) {
@@ -102,9 +110,9 @@ function openColumn(lines: StyledLine[], texts: string[]): number | null {
     const from = Math.max(0, r - MAX_PICKER_HEADER_ROWS - 1);
     const cropped = lines.slice(from, end + 1).map((line) => cropLine(line, width));
     const croppedTexts = cropped.map((line) => lineText(line).trimEnd());
-    if (openFrameTop(cropped, croppedTexts, end - from) !== r - from) return null;
+    if (openFrameTop(cropped, croppedTexts, end - from, frames) !== r - from) return null;
     if (BARE_SIGN.test(texts[r]!)) return width;
-    const header = ruleAbove(croppedTexts, r - from, croppedTexts[r - from]!.length, MAX_PICKER_HEADER_ROWS + 1);
+    const header = ruleAbove(croppedTexts, r - from, croppedTexts[r - from]!.length, MAX_PICKER_HEADER_ROWS + 1, frames);
     for (let row = header < 0 ? r : header + from; row <= end; row++) {
       const value = texts[row]!;
       if (displayWidth(value) <= width) continue;
@@ -118,28 +126,28 @@ function openColumn(lines: StyledLine[], texts: string[]): number | null {
 
 /** Sign (a) holds at `width` only for the frame at the tail: its bottom rule's run on the screen is
  *  exactly `width` wide, and one of `rows` is a row of that frame. */
-function anchored(lines: StyledLine[], texts: string[], width: number, rows: number[]): boolean {
+function anchored(lines: StyledLine[], texts: string[], width: number, rows: number[], frames: PiFrames): boolean {
   const cropped = lines.map((line) => cropLine(line, width));
-  const tail = tailRule(cropped);
+  const tail = tailRule(cropped, frames);
   if (tail === null) return false;
   const run = RULE_RUN.exec(texts[tail.bottom]!);
   if (run === null || displayWidth(run[0]) !== width) return false;
   const croppedTexts = cropped.map((line) => lineText(line).trimEnd());
   const rule = croppedTexts[tail.bottom]!.length;
-  const top = ruleAbove(croppedTexts, tail.bottom, rule, MAX_SCAN_ROWS);
-  const header = top >= 0 && locateComposer(cropped) === null ? ruleAbove(croppedTexts, top, rule, MAX_PICKER_HEADER_ROWS + 1) : -1;
+  const top = ruleAbove(croppedTexts, tail.bottom, rule, MAX_SCAN_ROWS, frames);
+  const header = top >= 0 && locateComposer(cropped, frames) === null ? ruleAbove(croppedTexts, top, rule, MAX_PICKER_HEADER_ROWS + 1, frames) : -1;
   const start = header >= 0 ? header : top >= 0 ? top : tail.bottom;
   return rows.some((r) => r >= start && r < tail.end);
 }
 
 /** Sign (b): a row of the tail frame runs past the frame's rules. */
-function overrunColumn(lines: StyledLine[], texts: string[]): number | null {
-  const tail = tailRule(lines);
+function overrunColumn(lines: StyledLine[], texts: string[], frames: PiFrames): number | null {
+  const tail = tailRule(lines, frames);
   if (tail === null) return null;
   const rule = texts[tail.bottom]!;
-  const top = ruleAbove(texts, tail.bottom, rule.length, MAX_SCAN_ROWS);
+  const top = ruleAbove(texts, tail.bottom, rule.length, MAX_SCAN_ROWS, frames);
   if (top < 0) return null;
-  const header = locateComposer(lines) === null ? ruleAbove(texts, top, rule.length, MAX_PICKER_HEADER_ROWS + 1) : -1;
+  const header = locateComposer(lines, frames) === null ? ruleAbove(texts, top, rule.length, MAX_PICKER_HEADER_ROWS + 1, frames) : -1;
   const width = displayWidth(rule);
   for (let r = header < 0 ? top : header; r < tail.end; r++) {
     const row = texts[r]!;
@@ -201,22 +209,20 @@ function clusters(text: string): string[] {
 
 /** One row cut at `columns` display columns, its styles kept. */
 export function cropLine(line: StyledLine, columns: number): StyledLine {
-  const segments: StyledLine["segments"] = [];
-  let used = 0;
-  for (const segment of line.segments) {
-    if (used >= columns) break;
-    const kept = cropText(segment.text, columns - used);
-    if (kept.length > 0) segments.push(kept.length === segment.text.length ? segment : { ...segment, text: kept });
-    used += displayWidth(kept);
-    if (kept.length < segment.text.length) break;
-  }
-  return { ...line, segments };
+  return cutRowColumns(line, columns);
 }
 
-/** What the pi readers read: the screen, or the screen cropped at OmO's side panel. Row indices are
- *  the screen's either way. */
-export function piView(lines: StyledLine[]): PiView {
-  const column = panelColumn(lines);
-  if (column === null) return { lines, cropped: false, column: null };
-  return { lines: lines.map((line) => cropLine(line, column)), cropped: true, column };
+/**
+ * What the pi readers read: the screen, cut to the region of a second panel's divider when the operator
+ * declared one and it is on screen (lib/split-panel.ts), and then cropped at OmO's side panel when a sign
+ * says it is there. The divider is cut first, so the signs above are read on pi's own region only. Row
+ * indices are the screen's either way.
+ */
+export function piView(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): PiView {
+  const split = splitPanelView(lines, frames.panels);
+  const region = split === null ? lines : split.lines;
+  const own = panelColumn(region, frames);
+  if (own === null && split === null) return { lines, cropped: false, column: null, rows: null, split: false };
+  const shown = own === null ? region : region.map((line) => cropLine(line, own));
+  return { lines: shown, cropped: true, column: own ?? split?.column ?? null, rows: split?.rows ?? null, split: split !== null };
 }

@@ -98,6 +98,7 @@ import { commandListAt, isRunningRow, noticeOver, ownCommandList, readCues, read
 import { surfaceOfScreen } from "../../web/src/lib/surface/fold.ts";
 import { findInputFrame, rowText, type Frame, type FrameRow } from "../../web/src/lib/surface/frame.ts";
 import { liftAsk, liftDialog, readerBlocks } from "../../web/src/lib/surface/lift.ts";
+import { agentRegion } from "../../web/src/lib/split-panel.ts";
 import type { AboveNotice } from "../../web/src/lib/surface/notice.ts";
 import type { CommandListRows, OtherScreenRow, ProfileMatch, QueuedRow } from "../../web/src/lib/surface/profile.ts";
 import {
@@ -2987,8 +2988,11 @@ export class SendProtocol {
     const grid = await this.within(state, this.deps.mux.readGrid(paneId, { scope: "viewport", lines: SEND_READ_LINES, styling: "preserve" }), until);
     const gateRevision = this.deps.gate.noteRead(paneId);
     if (!grid.ok) return null;
-    const rows = splitLines(parseAnsi(grid.value.text));
     const idle = state.match?.profile.idle ?? null;
+    // A second panel the operator declared (`idle.splitPanels`) is not the harness's screen: the box,
+    // the cues and every row compared below are read in the region its divider leaves. Rows keep the
+    // screen's indices, so nothing below needs to know.
+    const rows = agentRegion(splitLines(parseAnsi(grid.value.text)), idle?.splitPanels);
     const frame = idle === null ? null : findInputFrame(rows, idle);
     const blocks = readerBlocks(rows, harness);
     const ask =

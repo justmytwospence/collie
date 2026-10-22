@@ -24,6 +24,8 @@
 // decision site) → the adapters. The neutral model modules never import the registry, so nothing
 // here can close a cycle.
 
+import type { FrameDeclarations } from "./frame-declarations";
+import { getFrames } from "./operator-config";
 import { sendKeys } from "./api";
 import { describeApiError, describeThrownError } from "./api-error-message";
 import { type StyledLine } from "./blocks";
@@ -82,8 +84,11 @@ export interface DialogTarget<K extends DialogKind> {
 export function dialogDetector<K extends DialogKind>(
   kind: K,
   agent: string | undefined,
+  // The pane's machine's frame declaration, the one the render read the dialog with: a guard that
+  // re-derived without it would not find the dialog the user tapped, and would refuse every tap.
+  frames?: FrameDeclarations,
 ): (lines: StyledLine[]) => DialogModels[K] | null {
-  const adapter = adapterFor(agent);
+  const adapter = adapterFor(agent, frames);
   if (!adapter) return () => null;
   return (lines) => {
     // Through the unread-dialog post-pass, exactly as the renderer and `dialogPresent` are: the card
@@ -115,7 +120,7 @@ export async function guardDialog<K extends DialogKind>(
   return entryGuard(
     target,
     target.model,
-    dialogDetector(target.kind, target.agent),
+    dialogDetector(target.kind, target.agent, getFrames(target.scope?.host)),
     contract[compare],
     contract.region,
     contract.styled,
@@ -188,7 +193,7 @@ export async function readDialog<K extends DialogKind>(
     target.paneId,
     target.requestedLines,
     target.scope,
-    dialogDetector(target.kind, target.agent),
+    dialogDetector(target.kind, target.agent, getFrames(target.scope?.host)),
   );
 }
 
@@ -205,7 +210,7 @@ export async function pollDialog<K extends DialogKind>(
   return pollUntil(
     target,
     target.model,
-    dialogDetector(target.kind, target.agent),
+    dialogDetector(target.kind, target.agent, getFrames(target.scope?.host)),
     accept,
     DIALOG_CONTRACT[target.kind].identity,
   );

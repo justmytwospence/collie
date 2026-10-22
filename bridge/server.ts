@@ -1,3 +1,5 @@
+import type { FrameDeclarations } from "../web/src/lib/frame-declarations.ts";
+import { declaredFrames } from "../web/src/lib/surface/profile.ts";
 import { mkdir, realpath } from "node:fs/promises";
 import { isIP } from "node:net";
 import { homedir, hostname, networkInterfaces } from "node:os";
@@ -971,6 +973,8 @@ export function bridgeConfigBody(opts: {
    * member's own switch is not in the capability block the lead holds.
    */
   redact?: boolean;
+  /** This machine's frame declaration (`frames.toml`), or a member's own on a `?host=` answer. */
+  frames?: FrameDeclarations;
 }): BridgeConfig {
   const mode = modeForWire(opts.mode);
   const mine = opts.operatorCommands ?? [];
@@ -1006,6 +1010,9 @@ export function bridgeConfigBody(opts: {
   // Appended last and omit-when-absent: no key is an older bridge, or a member's scoped answer, and
   // the phone shows "unknown" for both rather than guessing "on".
   if (opts.redact !== undefined) wire.redact = opts.redact;
+  // Omit-when-absent: no key is "nothing declared" (or an older bridge), which the phone reads as the
+  // harness's own frame.
+  if (opts.frames !== undefined) wire.frames = opts.frames;
   return wire;
 }
 
@@ -2223,6 +2230,8 @@ export function startServer(opts: {
     sessions: () => registry.cards(),
     // M56 spec 09: the Surface reader version, on a build that computes a Surface.
     surfaceVersion: cfg.sendProtocol || cfg.surfaceShadow ? SURFACE_VERSION : undefined,
+    // This machine's frame declaration (`frames.toml`), the one its own reads were given at startup.
+    frames: () => declaredFrames(),
     dispatch: async (req, url, from) => {
       const session = url.searchParams.get("session") ?? undefined;
       const device = crewDeviceOf(req);
@@ -2899,6 +2908,9 @@ export function startServer(opts: {
             // switch is on, so the lead's value is what decides what reaches this phone, and the
             // member's own is not something the lead has been told.
             redact: scoped === undefined || scoped.kind === "local" ? cfg.redact : undefined,
+            // Whose panes the phone will read with it: this machine's own declaration, or a member's
+            // from its last hello. Never the lead's for a member, which draws its own boxes.
+            frames: scoped?.kind === "peer" ? crewLead?.framesFor(scoped.link.memberId) : declaredFrames(),
           }),
           req.headers.get("accept-encoding"),
         );

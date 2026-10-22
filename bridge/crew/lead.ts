@@ -1,3 +1,4 @@
+import type { FrameDeclarations } from "../../web/src/lib/frame-declarations.ts";
 import type { JsonValue } from "../json.ts";
 import type { SnapshotView } from "../sessions.ts";
 import { parsePeerMachineStats } from "../machine-parse.ts";
@@ -219,7 +220,7 @@ export interface CrewLeadDeps {
   readonly hello?: (
     link: CrewLink,
   ) => Promise<
-    PeerOutcome<{ readonly version: string | null; readonly mux?: MuxConfig | null; readonly sessions?: readonly SessionCard[] | null; readonly surfaceVersion?: number }>
+    PeerOutcome<{ readonly version: string | null; readonly mux?: MuxConfig | null; readonly sessions?: readonly SessionCard[] | null; readonly surfaceVersion?: number; readonly frames?: FrameDeclarations }>
   >;
   /** This collie's member id and label — the `servers[0]` entry (§9.2). */
   readonly self: { readonly id: string; readonly name: string };
@@ -411,6 +412,8 @@ export class CrewLead {
   private readonly sessionCards = new Map<string, readonly SessionCard[]>();
   /** The Surface reader version each member sent on its last hello (M56 spec 09), assigned like {@link muxBlocks}. */
   private readonly surfaceVersions = new Map<string, number>();
+  /** The frame declaration each member sent on its last hello, assigned like {@link muxBlocks}. */
+  private readonly frameDeclarations = new Map<string, FrameDeclarations>();
   /**
    * Members whose CURRENT link has already answered a hello, so their block is as fresh as the link.
    *
@@ -520,6 +523,7 @@ export class CrewLead {
         this.muxBlocks.delete(id);
         this.sessionCards.delete(id);
         this.surfaceVersions.delete(id);
+        this.frameDeclarations.delete(id);
         this.sweptVersions.delete(id);
         this.muxAsked.delete(id);
         this.loggedState.delete(id);
@@ -976,6 +980,8 @@ export class CrewLead {
         if (outcome.ok) this.setCapabilities(link.memberId, outcome.value.mux ?? null, outcome.value.sessions ?? null);
         // M56 spec 09: ASSIGNED too. A member that stops sending the field has no reader version here.
         if (outcome.ok) this.setSurfaceVersion(link.memberId, outcome.value.surfaceVersion ?? null);
+        // ASSIGNED as well: a member that stops sending a declaration has none here.
+        if (outcome.ok) this.setFrames(link.memberId, outcome.value.frames);
       }
     } catch (err) {
       // Defensive, exactly as `sweep` is: failure is a value everywhere in the crew client, so a
@@ -1008,6 +1014,17 @@ export class CrewLead {
   private setSurfaceVersion(memberId: string, version: number | null): void {
     if (version === null) this.surfaceVersions.delete(memberId);
     else this.surfaceVersions.set(memberId, version);
+  }
+
+  /** Record the frame declaration one hello carried, or drop the entry when it carried none. */
+  private setFrames(memberId: string, frames: FrameDeclarations | undefined): void {
+    if (frames === undefined) this.frameDeclarations.delete(memberId);
+    else this.frameDeclarations.set(memberId, frames);
+  }
+
+  /** The frame declaration a member sent on its last hello, or undefined: nothing declared. It dials nobody. */
+  framesFor(memberId: string): FrameDeclarations | undefined {
+    return this.frameDeclarations.get(memberId);
   }
 
   /** The Surface reader version a member sent on its last hello, or `null` (M56 spec 09). It dials nobody. */

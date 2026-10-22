@@ -35,7 +35,7 @@ describe("the side panel's signs", () => {
 
   it("does not crop the panel pane while the panel stays above the editor", () => {
     const lines = load("pi--omo-v5130-panel-idle.txt");
-    expect(piView(lines)).toEqual({ lines, cropped: false, column: null });
+    expect(piView(lines)).toEqual({ lines, cropped: false, column: null, rows: null, split: false });
     expect(piAdapter.composerPrompt?.(lines)).not.toBeNull();
   });
 

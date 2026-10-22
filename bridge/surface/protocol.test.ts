@@ -14,6 +14,7 @@ import type { HeldCancelAnswer, SendAnswer } from "../../web/src/lib/surface/sen
 import { parseAnsi } from "../../web/src/lib/ansi.ts";
 import { lineText, splitLines } from "../../web/src/lib/blocks.ts";
 import { findInputFrame } from "../../web/src/lib/surface/frame.ts";
+import { withFrameDeclaration } from "../../web/src/lib/surface/frame-declarations.ts";
 import { KeyGate } from "./key-gate.ts";
 import { boxMatches, commandBoxMatches, GENERIC_PROBE, wholePaste, LOCK_BOUND_MS, locateText, neverHeldEntry, probeLanding, RowRing, SendProtocol, SessionLocks, steadyRow, type SendDeps, type SendRequest } from "./protocol.ts";
 import { RequestStore } from "./requests.ts";
@@ -5210,6 +5211,46 @@ describe("a text that starts with `@` is a message on pi and OMP", () => {
     pane.inTurn = true;
     const answer = await rig({ pane, harness: "pi", version: "0.87.1" }).send("/model", { mode: "command" });
     expect(answer.receipt).toMatchObject({ outcome: "refused", reason: "turn_running", keys: [] });
+  });
+});
+
+describe("pi beside a second panel the operator declared (frames.toml `panel_below`)", () => {
+  // The panel an extension draws under the editor, split off by a row of `─` with a pointer in it, and
+  // its own empty composer at the bottom of the screen: the box a reader that knows no divider finds.
+  const DIVIDER = `${"─".repeat(19)}▴${"─".repeat(20)}`;
+  class SplitPiPane extends PiPane {
+    override render(): string {
+      return [super.render(), DIVIDER, " ◧ Sidebar · main: working", "", RULE, "", RULE, " ctrl+' close"].join("\n");
+    }
+  }
+  const declare = (profile: Profile): Profile => withFrameDeclaration(profile, { pi: { statusIndent: 1, panelBelow: { rule: "─", pointers: "▴▾" } } });
+  const alone = (profile: Profile): Profile => withFrameDeclaration(profile, { pi: { statusIndent: 1 } });
+
+  test("a message is typed into the agent's editor and read back from it, and the panel's is left alone", async () => {
+    const pane = new SplitPiPane("alt+Enter");
+    const { send } = rig({ pane, harness: "pi", version: "0.87.1", edit: declare });
+    const answer = await send("hello from the phone");
+    expect(answer.receipt).toMatchObject({ outcome: "sent" });
+    expect(pane.transcript.at(-1)).toBe(" > hello from the phone");
+  });
+
+  test("a draft in the agent's editor is seen: the send is refused for it and nothing is typed", async () => {
+    const pane = new SplitPiPane("alt+Enter");
+    pane.box = "next step";
+    const { send } = rig({ pane, harness: "pi", version: "0.87.1", edit: declare });
+    const answer = await send("hello from the phone");
+    expect(answer.receipt).toMatchObject({ outcome: "refused", reason: "draft_present", keys: [] });
+    expect(answer.offers).toEqual(["append", "replace", "cancel"]);
+    expect(pane.box).toBe("next step");
+    expect(pane.calls).toEqual([]);
+  });
+
+  test("without the divider declared the panel's empty composer is the box: the draft is not seen", async () => {
+    const pane = new SplitPiPane("alt+Enter");
+    pane.box = "next step";
+    const { send } = rig({ pane, harness: "pi", version: "0.87.1", edit: alone });
+    const answer = await send("hello from the phone");
+    expect(answer.receipt?.reason).not.toBe("draft_present");
   });
 });
 

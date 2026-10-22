@@ -5,6 +5,7 @@
 // absent agent — the universal single raw block. This is the seam where the Claude-Code TUI grammars
 // (and any future agent's) run; every non-adapter agent keeps the pure raw mirror.
 
+import type { FrameDeclarations } from "../frame-declarations";
 import { lineText, type Block, type StyledLine } from "../blocks";
 import { adapterFor, hasBlockGrammar } from "./registry";
 import { unreadDialogSignature } from "./unread-dialog-model";
@@ -31,11 +32,11 @@ import {
  */
 export function buildBlocks(
   lines: StyledLine[],
-  ctx?: { agent?: string; grammars?: boolean; nativeMirror?: boolean },
+  ctx?: { agent?: string; grammars?: boolean; nativeMirror?: boolean; frames?: FrameDeclarations },
 ): Block[] {
   // `grammars: false` is the raw-terminal pref: no adapter runs, so no chrome is stripped and no
   // dialog is lifted, but a native-mirror agent still keeps its display passes below.
-  const adapter = ctx?.grammars === false ? undefined : adapterFor(ctx?.agent);
+  const adapter = ctx?.grammars === false ? undefined : adapterFor(ctx?.agent, ctx?.frames);
   const blocks = adapter?.buildBlocks(lines) ?? [{ kind: "raw", lines }];
   // The unread-dialog post-pass runs LAST, over the DECORATED blocks. The display passes only ever
   // touch raw blocks, so running the card first would leave every Muse card showing an un-trimmed,
