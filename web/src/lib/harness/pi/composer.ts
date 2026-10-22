@@ -38,15 +38,15 @@
 // is on screen (index.ts asks ask.ts for that too); a status tail alone never permits typing.
 import { MIRROR_BG, MIRROR_FG } from "../../ansi";
 import { lineText, type StyledLine } from "../../blocks";
+import { DEFAULT_PI_FRAMES, ruleRunColor, type PiFrames } from "./frames";
 
-const RULE = /^─{8,}$/;
-/** A rule carrying a label: a turn label (`── ⠴ Working ───`) or a scroll mark (`─── ↑ 2 more ───`). */
-const LABELLED_RULE = /^─{2,} \S.*? ─{3,}$/;
+// The rules, bare (`─{8,}`) or carrying a label (a turn label `── ⠴ Working ───`, a scroll mark
+// `─── ↑ 2 more ───`), and the status rows' limits come from `PiFrames` (frames.ts): pi's own shapes
+// unless the operator declared their editor's.
 const PROMPT = /^❯(?: ([\s\S]*))?$/;
 const CONTINUATION = /^ {2}([\s\S]*)$/;
 const BOX_EDGE = /^[─-╿]/;
 const MAX_EDITOR_ROWS = 100;
-const MAX_STATUS_ROWS = 4;
 /** The `inset` layout (see the header): its rules, its prompt row and its later draft rows. */
 const INSET_RULE = /^ ─{8,}$/;
 const INSET_LABELLED_RULE = /^ ─{2,} \S.*? ─{3,}$/;
@@ -67,8 +67,8 @@ function text(line: StyledLine): string {
   return lineText(line).trimEnd();
 }
 
-function ruleColor(line: StyledLine): string | undefined {
-  return line.segments.find((segment) => segment.text.trim() !== "")?.fg;
+function ruleColor(line: StyledLine, frames: PiFrames): string | undefined {
+  return ruleRunColor(line.segments, frames);
 }
 
 function styled(line: StyledLine): boolean {
@@ -81,15 +81,12 @@ function pastedRule(value: string, width: number): boolean {
   return /^─+$/.test(value) && value.length < width;
 }
 
-function isRule(value: string): boolean {
-  return RULE.test(value) || LABELLED_RULE.test(value);
-}
-
-/** A status row's shape: not blank, not a box edge, not a prompt row, not the palette. */
-function statusRow(line: StyledLine): boolean {
+/** A status row's shape: not blank, not a box edge, not a prompt row, not the palette, and indented
+ *  no further than the frame allows (pi's own rows: not at all). */
+function statusRow(line: StyledLine, frames: PiFrames): boolean {
   const value = text(line);
-  return value !== "" && !BOX_EDGE.test(value.trimStart()) && !PROMPT.test(value) && !value.startsWith(" ") &&
-    !value.startsWith("→ ");
+  return value !== "" && !BOX_EDGE.test(value.trimStart()) && !PROMPT.test(value) &&
+    value.length - value.trimStart().length <= frames.statusIndent && !value.trimStart().startsWith("→ ");
 }
 
 /**
@@ -131,9 +128,12 @@ function paletteRows(rows: string[]): boolean {
  * The nearest row above `from`, at most `limit` rows up, that is a rule of `width` characters, bare
  * or labelled: the top of the section whose bottom rule is `from`. -1 when there is none.
  */
-export function ruleAbove(texts: string[], from: number, width: number, limit: number): number {
+export function ruleAbove(
+  texts: string[], from: number, width: number, limit: number, frames: PiFrames = DEFAULT_PI_FRAMES,
+  widths?: number[],
+): number {
   for (let r = from - 1; r >= 0 && from - r <= limit; r--) {
-    if (texts[r]!.length === width && isRule(texts[r]!)) return r;
+    if ((widths?.[r] ?? texts[r]!.length) === width && frames.rule(texts[r]!)) return r;
   }
   return -1;
 }
@@ -151,10 +151,10 @@ export interface PiTail {
 }
 
 /** The editor's bottom rule, the optional palette under it and the status rows at the tail. */
-export function tailRule(lines: StyledLine[]): PiTail | null {
+export function tailRule(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): PiTail | null {
   let end = lines.length;
   while (end > 0 && text(lines[end - 1]!) === "") end--;
-  return columnZeroTail(lines, end) ?? insetTail(lines, end);
+  return columnZeroTail(lines, end, frames) ?? insetTail(lines, end);
 }
 
 /**
@@ -164,7 +164,7 @@ export function tailRule(lines: StyledLine[]): PiTail | null {
  */
 function insetTail(lines: StyledLine[], end: number): PiTail | null {
   let statusStart = end;
-  while (statusStart > 0 && end - statusStart < MAX_INSET_STATUS_ROWS && statusRow(lines[statusStart - 1]!)) statusStart--;
+  while (statusStart > 0 && end - statusStart < MAX_INSET_STATUS_ROWS && statusRow(lines[statusStart - 1]!, DEFAULT_PI_FRAMES)) statusStart--;
   // No status row at all: pi-powerline-footer with no footer of another extension (live, 2026-10-20)
   // ends the screen with its bottom rule, or with its widget row under it.
   if (statusStart !== end && !paintedStatus(lines.slice(statusStart, end))) return null;
@@ -175,23 +175,36 @@ function insetTail(lines: StyledLine[], end: number): PiTail | null {
 }
 
 /** The column-zero layouts' tail: stock pi's and OmO's (see the header). */
-function columnZeroTail(lines: StyledLine[], end: number): PiTail | null {
+function columnZeroTail(lines: StyledLine[], end: number, frames: PiFrames): PiTail | null {
   // No status row at all (issue 445): an extension replaced pi's footer with an empty one, so the
   // editor's bottom rule is the last thing on screen. A rule of the same width must stand above it, and `locateComposer`
   // still demands the same colour and a clean editor body, which is what keeps other boxes out.
-  if (end > 0 && RULE.test(text(lines[end - 1]!)) &&
-    ruleAbove(lines.map(text), end - 1, text(lines[end - 1]!).length, MAX_EDITOR_ROWS) >= 0) {
+  if (end > 0 && frames.edge(text(lines[end - 1]!)) &&
+    ruleAbove(lines.map(text), end - 1, frames.width(lines[end - 1]!.segments), MAX_EDITOR_ROWS, frames,
+      lines.map((line) => frames.width(line.segments))) >= 0) {
     return { bottom: end - 1, statusStart: end, end, palette: false, inset: false };
   }
-  // The status rows: one to four, painted as `paintedStatus` says.
+  // The status rows: one to four (or as many as the frame declares), painted as `paintedStatus` says.
+  // A declared frame may also leave a blank row between two of them.
   let statusStart = end;
-  while (statusStart > 0 && end - statusStart < MAX_STATUS_ROWS && statusRow(lines[statusStart - 1]!)) statusStart--;
+  let blanks = 0;
+  while (statusStart > 0 && end - statusStart < frames.statusRows) {
+    const row = lines[statusStart - 1]!;
+    if (statusRow(row, frames)) {
+      statusStart--;
+      continue;
+    }
+    const gap = text(row) === "" && blanks < frames.statusBlankRows && statusStart > 1 && statusRow(lines[statusStart - 2]!, frames);
+    if (!gap) break;
+    blanks++;
+    statusStart--;
+  }
   if (statusStart === end || statusStart === 0 || !paintedStatus(lines.slice(statusStart, end))) return null;
-  if (RULE.test(text(lines[statusStart - 1]!))) return { bottom: statusStart - 1, statusStart, end, palette: false, inset: false };
+  if (frames.edge(text(lines[statusStart - 1]!))) return { bottom: statusStart - 1, statusStart, end, palette: false, inset: false };
   // The palette, directly under the bottom rule, in either form.
   let top = statusStart;
   while (top > 0 && statusStart - top < MAX_PALETTE_ROWS && /^(?: *→ | +\S)/.test(text(lines[top - 1]!))) top--;
-  if (top === statusStart || top < 1 || !RULE.test(text(lines[top - 1]!))) return null;
+  if (top === statusStart || top < 1 || !frames.edge(text(lines[top - 1]!))) return null;
   if (!paletteRows(lines.slice(top, statusStart).map(text))) return null;
   return { bottom: top - 1, statusStart, end, palette: true, inset: false };
 }
@@ -239,7 +252,7 @@ function insetComposer(lines: StyledLine[], tail: PiTail): PiComposer | null {
     top--;
   }
   if (top < 0 || top + 1 === bottom) return null;
-  if (ruleColor(lines[top]!) !== ruleColor(bottomLine)) return null;
+  if (ruleColor(lines[top]!, DEFAULT_PI_FRAMES) !== ruleColor(bottomLine, DEFAULT_PI_FRAMES)) return null;
   const rows = lines.slice(top + 1, bottom);
   if (!INSET_PROMPT.test(text(rows[0]!))) return null;
   const ok = rows.slice(1).every((row) => {
@@ -252,32 +265,34 @@ function insetComposer(lines: StyledLine[], tail: PiTail): PiComposer | null {
   return { layout: "inset", top, bottom, statusStart: tail.statusStart, end: tail.end };
 }
 
-export function locateComposer(lines: StyledLine[]): PiComposer | null {
-  const tail = tailRule(lines);
+export function locateComposer(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): PiComposer | null {
+  const tail = tailRule(lines, frames);
   if (tail === null) return null;
   if (tail.inset) return insetComposer(lines, tail);
   const { bottom } = tail;
   const bottomLine = lines[bottom]!;
-  const width = text(bottomLine).length;
+  const width = frames.width(bottomLine.segments);
   // The top rule is the nearest rule of the bottom rule's width. A shorter run of `─` is text the
   // operator pasted into the draft (the canary's `15-rule` message), never the editor's own border.
   let top = bottom - 1;
   while (top >= 0) {
     const value = text(lines[top]!);
-    if (isRule(value) && value.length === width) break;
+    if (frames.rule(value) && frames.width(lines[top]!.segments) === width) break;
     if (bottom - top > MAX_EDITOR_ROWS) return null;
     top--;
   }
   if (top < 0 || top + 1 === bottom) return null;
   const topLine = lines[top]!;
-  if (ruleColor(topLine) !== ruleColor(bottomLine)) return null;
+  if (ruleColor(topLine, frames) !== ruleColor(bottomLine, frames)) return null;
   const rows = lines.slice(top + 1, bottom);
-  if (rows.some((row) => isRule(text(row)) && text(row).length === width)) return null;
+  if (rows.some((row) => frames.rule(text(row)) && frames.width(row.segments) === width)) return null;
   const first = rows[0]!;
   let layout: "omo" | "stock";
   if (PROMPT.test(text(first))) {
     // OmO: the prompt glyph wears the rules' colour, and every later row is a two-space continuation.
-    if (ruleColor(bottomLine) === undefined || ruleColor(first) !== ruleColor(bottomLine)) return null;
+    // The prompt row holds no rule glyph, so its colour is its first visible segment's, as before.
+    const promptColor = first.segments.find((segment) => segment.text.trim() !== "")?.fg;
+    if (ruleColor(bottomLine, frames) === undefined || promptColor !== ruleColor(bottomLine, frames)) return null;
     const ok = rows.slice(1).every((row) => {
       const value = text(row);
       return value === "" || (CONTINUATION.test(value) && (!BOX_EDGE.test(value.trimStart()) || pastedRule(value.trimStart(), width)));
@@ -327,8 +342,8 @@ function draftOf(lines: StyledLine[], composer: PiComposer): string | null {
   return draft || null;
 }
 
-export function composerDraft(lines: StyledLine[]): string | null {
-  const composer = locateComposer(lines);
+export function composerDraft(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): string | null {
+  const composer = locateComposer(lines, frames);
   return composer === null ? null : draftOf(lines, composer);
 }
 
@@ -337,8 +352,8 @@ const BRIDGE_PROMPT_TAIL_LINES = 6;
 
 /** Bind clearing to the exact editor frame, not changing status counters below it. Null (an unbound
  *  write) when an open palette pushes the frame out of the bridge's tail window. */
-export function composerPrompt(lines: StyledLine[]): string | null {
-  const composer = locateComposer(lines);
+export function composerPrompt(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): string | null {
+  const composer = locateComposer(lines, frames);
   if (composer === null) return null;
   if (composer.end - composer.bottom - 1 > BRIDGE_PROMPT_TAIL_LINES - 1) return null;
   return lines.slice(composer.top, composer.bottom + 1).map(text).join("\n");
@@ -346,7 +361,7 @@ export function composerPrompt(lines: StyledLine[]): string | null {
 
 /** The status rows under the bottom rule. They stay readable while a question replaces the editor
  *  (the rule above them is then the dialog's bottom rule, pi--omo-v5130-single-described.txt). */
-export function composerStatusLines(lines: StyledLine[]): StyledLine[] {
-  const tail = tailRule(lines);
+export function composerStatusLines(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): StyledLine[] {
+  const tail = tailRule(lines, frames);
   return tail === null ? [] : lines.slice(tail.statusStart, tail.end);
 }

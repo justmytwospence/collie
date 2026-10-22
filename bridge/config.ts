@@ -303,6 +303,13 @@ export interface Config {
    */
   cacheRulesFile: string;
   /**
+   * Where the operator declares how their extensions draw a harness's input box — `frames.toml`, in
+   * the same dir (bridge/operator-frames.ts, web/src/lib/frame-declarations.ts). Unlike its siblings it
+   * is read ONCE at startup: it reshapes the surface profiles every read uses, and a crew member
+   * publishes it in its `hello`, so a change takes `collie restart`, as `config.toml` does.
+   */
+  framesFile: string;
+  /**
    * How many seconds before a pane's prompt cache expires the watched-pane push goes out
    * (`bridge/cache/warden.ts`). One window for every watched pane; there is no per-pane threshold.
    *
@@ -733,6 +740,7 @@ export function loadConfig(env: Environment = process.env): Config {
     fontsDir: join(configDir, "fonts"),
     launchersFile: join(configDir, "launchers.toml"),
     cacheRulesFile: join(configDir, "cache-rules.toml"),
+    framesFile: join(configDir, "frames.toml"),
     trustedUser: env.COLLIE_TRUSTED_USER ?? "",
     trustedUserOptional: envBool("COLLIE_TRUSTED_USER_OPTIONAL", false, env),
     accessTeam: (env.COLLIE_ACCESS_TEAM ?? "").trim(),

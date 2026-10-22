@@ -28,7 +28,8 @@ import { ompAdapter } from "./omp";
 import { opencodeAdapter } from "./opencode";
 import { agyAdapter, antigravityAdapter } from "./agy";
 import { museAdapter } from "./muse";
-import { piAdapter } from "./pi";
+import { piAdapter, piAdapterFor } from "./pi";
+import type { FrameDeclarations } from "../frame-declarations";
 import { kiroAdapter } from "./kiro";
 
 // Built FROM the adapter list (not a hand-written literal) so a key can't silently drift from its
@@ -55,7 +56,10 @@ const ADAPTERS: Record<string, HarnessAdapter> = Object.fromEntries(
  *  Exact match only. Prefix-folding here was the #99 reject: `startsWith("claude")` would hand
  *  Claude's dialog grammars (and their live keystroke recipes) to any agent string with that
  *  prefix. Variant tolerance for slash catalogs belongs in `canonicalAgent`. */
-export function adapterFor(agent: string | undefined): HarnessAdapter | undefined {
+export function adapterFor(agent: string | undefined, frames?: FrameDeclarations): HarnessAdapter | undefined {
+  // The operator's frame declaration for the pane's machine (lib/frame-declarations.ts): only the
+  // adapters that read one are swapped, and only when it names their harness.
+  if (agent === "pi" && frames?.pi !== undefined) return piAdapterFor(frames.pi);
   return agent !== undefined && Object.hasOwn(ADAPTERS, agent) ? ADAPTERS[agent] : undefined;
 }
 

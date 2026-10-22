@@ -42,6 +42,8 @@ export interface PiFooter {
   escapeVerb: string | null;
   /** Left/Right or Tab named as moving between tabs. */
   tabs: boolean;
+  /** The verb the footer gives a bare Tab (`done`, `next`), or null when Tab is not named on its own. */
+  tabVerb: string | null;
 }
 
 // Segment separators: a bullet or a middle dot with spaces round it, or a run of two or more spaces.
@@ -81,6 +83,7 @@ export function parsePiFooter(text: string): PiFooter | null {
     spaceToggles: false,
     escapeVerb: null,
     tabs: false,
+    tabVerb: null,
   };
   for (const segment of segments) {
     // Typed-text prose: `type a number or an answer`, `type numbers (1,3) or an answer`, `type 1,3`.
@@ -111,6 +114,8 @@ export function parsePiFooter(text: string): PiFooter | null {
         footer.tabs = true;
         break;
       case "tab":
+        if (/^tab$/i.test(m[1]!)) footer.tabVerb = verb;
+        break;
       case "letter":
         break;
     }

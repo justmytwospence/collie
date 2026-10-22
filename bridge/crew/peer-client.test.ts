@@ -382,6 +382,18 @@ describe("PeerClient — the request the lead sends (§6)", () => {
   });
 });
 
+describe("PeerClient — a member's frame declaration", () => {
+  test("is read from hello, re-checked field by field, and absent when the member sends none", async () => {
+    const sent = { protocol: 2, member: "laptop", frames: { pi: { ruleGlyphs: "━", statusRows: 99, extra: 1 } } };
+    const outcome = await client(replying(sent).fetch).hello(laptop);
+    expect(outcome.ok && outcome.value.frames).toEqual({ pi: { ruleGlyphs: "━" } });
+    const none = await client(replying({ protocol: 2, member: "laptop" }).fetch).hello(laptop);
+    expect(none.ok && Object.hasOwn(none.value, "frames")).toBe(false);
+    const junk = await client(replying({ protocol: 2, member: "laptop", frames: "pi" }).fetch).hello(laptop);
+    expect(junk.ok && Object.hasOwn(junk.value, "frames")).toBe(false);
+  });
+});
+
 describe("PeerClient — the verdict matrix (§7, §10.2)", () => {
   test("reachable: the body, the peer's id, and the LEAD's receipt time", async () => {
     const { fetch } = replying({ protocol: 2, member: "laptop" });

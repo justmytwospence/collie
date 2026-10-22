@@ -134,6 +134,49 @@ OmO's title row counts down (`Ask user · 30m`). `coreSignature` blanks that clo
 Chromium at the `iphone-14` preset). Chat drew the card with three option buttons and Cancel. With
 the pointer on Red, a tap on Green answered `Color: Green`.
 
+## Multi-select, when the operator declares it: pi-plugins' ask_user_question (2026-10-21)
+
+pi-plugins' `ask_user_question` (`justmytwospence/pi-plugins`, `packages/pi-ask-user-question`, public)
+draws a multiple choice as OmO's form: a strip with one chip and `Submit`, the question, numbered rows
+with a one-cell tick column after the number (`✓` or a space), a last row `Other · type your own
+answer`, one note under the rows, and the footer
+`↑↓ move  1-9 select  space toggle  enter next  tab done  n note  esc cancel`. `multi.ts` reads it
+only under a frame declaration that names the tick glyphs (`checkboxTicks: "✓"`, `typedAnswer: "Other"`);
+without one every pi multi-select stays raw, as .adr/0098 decides.
+
+Read from source (`src/dialog.ts`, `handleInput`): a digit moves the pointer to its row and toggles
+that row; on the `Other` row it ticks the typed answer instead, whose text is asked for on commit.
+Space toggles the pointed row. On a lone question Tab commits the ticks (and asks for `Other`'s text
+first when it is ticked); Enter with nothing ticked picks the pointed row and commits. So the recipe
+is `digit` with the advance `Tab`, and a ticked `Other` stays raw.
+
+Captured 2026-10-21 from a live pane on pi 1.3.0 under Herdr 0.9.5, 165 columns, under the frame
+declaration of the `pi--v130-frames-*` captures, each key sent with `herdr pane send-keys`:
+`pi--v130-frames-multi.txt` (nothing ticked), `-checked` (after `2`: Green ticked, the pointer on
+it) and `-two` (after `3`: Blue ticked too). Every key toggled its own row and moved the pointer, and
+nothing else on the screen changed. The fold reads the three as one ask: its hash leaves the ticks
+and the pointer out. Tab committing the ticks was read from the source and seen in the terminal, not
+yet through a phone tap.
+
+What stays raw: a strip with a second question (Tab then moves to the next tab), a footer without
+`1-9 select`, `space toggle` and a Tab that is `done` or `submit`, a ticked `Other`, any row outside the
+shape.
+## A narrow pane (2026-10-21)
+
+A pane narrower than a dialog's key hint or one of its rows wraps them. Two shapes, both read in
+`ask.ts` and pinned in `narrow.test.ts` on the real narrow captures `pi--v0871-question-narrow.txt` and
+`pi--v0871-permission-gate-narrow.txt`: pi's own selector wraps its hint this way below 47 columns.
+
+- A footer whose hints are two spaces apart (pi's own selector,
+  `↑↓ navigate  enter select  escape/ctrl+c cancel`) wrapped between two hints. Joined with one space,
+  `enter select escape/ctrl+c cancel` reads as one hint and the Escape it names is lost, so the question
+  stays raw. Both joins are read and the one with more hints wins; a hint split across the break does
+  not parse as two, so it falls back to the one-space join, as before.
+- Under a frame declaration with `optionGutter`, a choice whose rest wraps behind that one-column gutter
+  (` │    rest`, the way pi-plugins' `ask_user_question` draws it). The rest joins the choice; a gutter
+  row under the free-text row joins nothing. Without the declaration such a row ends the options, as
+  before.
+
 ## The editor
 
 Registering an adapter for `pi` moves every pi pane off the one-step send onto the guarded one

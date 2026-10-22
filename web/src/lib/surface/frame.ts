@@ -255,7 +255,9 @@ function paintedFooter(rows: readonly FrameRow[], texts: readonly string[], bott
   let end = texts.length;
   while (end > first && isBlank(texts[end - 1]!)) end--;
   if (end <= first || end - first > idle.volatile.below.maxRows || !paintedRow(rows[first]!)) return false;
-  for (let j = first; j < end; j++) if (isBlank(texts[j]!)) return false;
+  // A blank row ends the footer, unless the profile lets the footer hold some (`underBlankRows`).
+  let blanks = 0;
+  for (let j = first; j < end; j++) if (isBlank(texts[j]!) && ++blanks > (idle.frame.underBlankRows ?? 0)) return false;
   return true;
 }
 

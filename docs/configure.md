@@ -125,7 +125,7 @@ Without this setting, the UI will load as an empty page. See
 ## Your own slash commands
 
 Put machine-specific commands, such as a Herdr plugin `/fork-in-herdr` or a custom `/deploy`, in
-`commands.toml`. This is one of six config files that share the same reader and load pattern:
+`commands.toml`. This is one of seven config files that share the same directory:
 
 | file | scope | confirm/danger flag | live reload |
 | --- | --- | --- | --- |
@@ -135,12 +135,13 @@ Put machine-specific commands, such as a Herdr plugin `/fork-in-herdr` or a cust
 | `theme.toml` | none, the faces are a device setting | none | yes, on the next page reload |
 | `launchers.toml` | none, matched by exact command instead; `[phone]` switches the rows a phone adds | none | yes, but an already-open tab re-reads the rows only on its next load |
 | `cache-rules.toml` | none, matched by exact rule id instead | none | yes, no restart needed |
+| `frames.toml` | none, one table per harness | none | no, read at startup: run `collie restart` |
 
 These files are unchanged by the config file. They share the instance `config.toml`'s
 directory, they keep their own formats and their own live reload, and nothing merges them into it.
 
 Any row with the flag set requires a two-tap confirmation before it fires. Edits to any of these
-files take effect without restarting the service. If Collie rejects a row, `journalctl --user -u
+files but `frames.toml` take effect without restarting the service. If Collie rejects a row, `journalctl --user -u
 collie -n 20` prints the line number and the error.
 
 ```bash
@@ -630,6 +631,63 @@ These are the rule ids you may write.
 | `pi.openai`, `opencode.openai` | pi or opencode talking to OpenAI |
 | `pi.google`, `opencode.google` | pi or opencode talking to Google |
 | `pi.unknown`, `opencode.unknown` | pi or opencode on an upstream that documents no TTL |
+
+## Your own editor frame
+
+Use `frames.toml` when an extension redraws your agent's input box, and Collie stops finding it.
+
+```bash
+cp frames.toml.example ~/.config/collie/frames.toml
+collie restart
+```
+
+Collie finds an agent's input box by the shape the agent draws. A pi extension can change that
+shape: it can paint a gauge into the box's rules, put a mode label at the end of a rule, or draw a
+taller footer. Then every send needs Type here, and a question shows only the Escape card. This file
+tells Collie the shape your extensions draw. It applies to pi panes only.
+
+```toml
+[pi]
+# The gauge in the rules is drawn in ━ as well as ─.
+rule_glyphs = "━"
+# A rule may carry a label at either end, such as ──── INSERT.
+rule_labels = "ends"
+# Rows under the box, how far in one may start, and blank rows between them.
+status_rows = 12
+status_indent = 1
+status_blank_rows = 1
+# A question option that wraps continues behind this one-column gutter.
+option_gutter = "│"
+# Lift a lone checkbox question whose rows carry a tick column with these glyphs.
+checkbox_ticks = "✓"
+# The row with this label is the typed answer: never a button.
+typed_answer = "Other"
+```
+
+Every key is optional, and a key you leave out keeps pi's own shape.
+
+| key | what it allows | pi's own | bounds |
+| --- | --- | --- | --- |
+| `rule_glyphs` | Glyphs a rule may be drawn with besides `─` | none | 1 to 8 box-drawing or block glyphs |
+| `rule_labels` | `ends`: a label before or after a rule's run | `middle` | `middle` or `ends` |
+| `status_rows` | Rows under the box's bottom rule | 4 | 1 to 16 |
+| `status_indent` | Columns a row under the box may start in | 0 | 0 to 4 |
+| `status_blank_rows` | Blank rows between two rows under the box | 0 | 0 to 2 |
+| `option_gutter` | A glyph an option's wrapped rest stands behind | none | 1 box-drawing glyph |
+| `checkbox_ticks` | Tick glyphs: a lone checkbox question lifts as checkboxes | none: checkboxes stay raw | 1 to 4 glyphs, no letter or digit |
+| `typed_answer` | The label of a checkbox question's typed-answer row | none | 1 to 32 characters |
+
+A checkbox question lifts only when its footer names its keys: digits that select, Space that toggles,
+and a Tab that is `done` or `submit`. A digit toggles its row and Tab submits; the typed-answer row
+stays in the terminal.
+
+Only the limits in the table move. Collie still wants the box's rules at the same width and in
+the same colour, the box at the bottom of the screen, and the rows under it painted.
+
+Collie reads this file once, at startup, so run `collie restart` after an edit. A key out of
+bounds is dropped with a line in the log, and the rest of the file still applies. A file that does
+not parse declares nothing. In a crew, each machine reads its own file and sends it to the lead, so
+the phone reads each machine's panes with that machine's own frame.
 
 ## The prompt-cache countdown
 

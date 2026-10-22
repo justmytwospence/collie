@@ -14,6 +14,8 @@ import { asJsonNumber, asJsonObject, asJsonString, type JsonObject, type JsonVal
 import { compareSemver } from "../semver";
 import { EDGE_KINDS, type EdgeProfile } from "./edges";
 import { HOLD_DECISIONS, HOLD_GRACE_MS, type HoldProfile } from "./hold";
+import type { FrameDeclarations } from "../frame-declarations";
+import { withFrameDeclaration } from "./frame-declarations";
 import { PROFILE_FILES } from "./profiles/index";
 
 export type ProfileStatus = "verified" | "provisional" | "revoked";
@@ -269,6 +271,13 @@ export interface FrameLayout {
    * must name every row the box may hold, so a box with any other row inside is no box. Optional.
    */
   readonly ownPrompt?: boolean;
+  /**
+   * The interior walk only, with `underPainted`. How many blank rows the painted footer may hold
+   * between two of its rows: an extension's widget under the box and the footer under it (the
+   * operator's `frames.toml`, surface/frame-declarations.ts). Optional; with none, a blank row ends
+   * the footer as before.
+   */
+  readonly underBlankRows?: number;
 }
 
 /** The ghost text after the cursor ({@link Profile.idle.inlineHint}). */
@@ -1222,15 +1231,32 @@ export interface ProfileForOptions {
 }
 
 let parsed: ReadonlyMap<string, Profile> | null = null;
+let declared: FrameDeclarations | undefined;
 
-/** Every profile in `profiles/`, parsed and checked once. A bad file throws on first use. */
+/**
+ * The operator's frame declarations (`frames.toml`), applied to every profile they name from the next
+ * `loadProfiles` on. The bridge calls it once at startup, before the first read: one bridge mirrors one
+ * machine, whose extensions draw every box it reads. `undefined` restores the shipped profiles.
+ */
+export function declareFrames(declarations: FrameDeclarations | undefined): void {
+  declared = declarations;
+  parsed = null;
+}
+
+/** The declarations `declareFrames` was given: the bridge's own machine's, and none on the phone. */
+export function declaredFrames(): FrameDeclarations | undefined {
+  return declared;
+}
+
+/** Every profile in `profiles/`, parsed and checked once, with the operator's frame declarations
+ *  applied (`declareFrames`). A bad file throws on first use. */
 export function loadProfiles(): ReadonlyMap<string, Profile> {
   if (parsed !== null) return parsed;
   const out = new Map<string, Profile>();
   for (const [stem, raw] of Object.entries(PROFILE_FILES)) {
     const profile = parseProfile(raw);
     if (profile.id !== stem) throw new ProfileError("id", `${profile.id} does not match its file name ${stem}`);
-    out.set(profile.id, profile);
+    out.set(profile.id, withFrameDeclaration(profile, declared));
   }
   const claimed = new Set(out.keys());
   for (const profile of out.values()) {

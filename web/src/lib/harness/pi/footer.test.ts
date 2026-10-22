@@ -30,7 +30,18 @@ describe("parsePiFooter: the footers the corpus prints", () => {
     ],
     ["Enter to select · Ctrl+S to set as default · Escape/Ctrl+C to cancel", false, "select", false, false, "cancel", false],
   ] as const)("%s", (text, arrowsMove, enter, digitsSelect, spaceToggles, escapeVerb, tabs) => {
-    expect(parsePiFooter(text)).toEqual({ text, arrowsMove, enter, digitsSelect, spaceToggles, escapeVerb, tabs });
+    const { tabVerb: _tabVerb, ...footer } = parsePiFooter(text)!;
+    expect(footer).toEqual({ text, arrowsMove, enter, digitsSelect, spaceToggles, escapeVerb, tabs });
+  });
+
+  it.each([
+    ["↑↓ move  1-9 select  space toggle  enter next  tab done  n note  esc cancel", "done"],
+    ["↑↓ move  1-9 select  space select  enter next  tab next question  c comment  esc cancel", "next question"],
+    ["↑↓ navigate • Enter to select • Tab to add note • type a number or an answer • Esc to cancel", "add note"],
+    ["Tab/←→ navigate • ↑↓ select • Enter confirm • Esc cancel", null],
+    ["↑↓ navigate • Enter to select • Esc to cancel", null],
+  ] as const)("names what a bare Tab does: %s", (text, tabVerb) => {
+    expect(parsePiFooter(text)?.tabVerb).toBe(tabVerb);
   });
 });
 
