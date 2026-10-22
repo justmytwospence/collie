@@ -88,6 +88,7 @@ import { useLive } from "@/lib/liveness";
 import { useCatchingUp, useLocked } from "@/lib/idle";
 import { OfflineDraftNote, TerminalDraftPreview } from "@/components/terminal-draft-preview";
 import { isLead, scopeKey, type Scope } from "@/lib/scope";
+import { useFrames } from "@/lib/operator-config";
 import type { PaneSubagent, PaneTodo } from "@/lib/types";
 import { AgentsSheet, subagentName } from "@/components/agents-sheet";
 import { SubagentSheetCtx, type SubagentTarget } from "@/components/chat-cards";
@@ -922,7 +923,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // The pane's harness adapter, resolved HERE (this is where the agent is known) so the neutral
   // draft helpers below stay harness-free: they take the capability, never the grammar. Undefined for
   // any agent without an adapter, which is exactly the "no idea" case those helpers already handle.
-  const adapter = adapterFor(agent ?? undefined);
+  const adapter = adapterFor(agent ?? undefined, useFrames(scope));
 
   // Guard against a false stranded-draft: if the detected draft is what we JUST sent, it's our own
   // reply still echoing on the "❯" line before the bridge's Enter, so suppress the preview. Applied

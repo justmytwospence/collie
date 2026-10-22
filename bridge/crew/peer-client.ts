@@ -1,3 +1,4 @@
+import { frameDeclarationsFrom, type FrameDeclarations } from "../../web/src/lib/frame-declarations.ts";
 import type { JsonObject, JsonValue } from "../json.ts";
 import { CREW_PROTOCOL_VERSION } from "./enrollment.ts";
 import {
@@ -12,6 +13,7 @@ import {
   CREW_MUX_FIELD,
   CREW_SESSIONS_FIELD,
   CREW_SURFACE_FIELD,
+  CREW_FRAMES_FIELD,
   CREW_PREFIX,
   PAIRING_LABEL_COLLISION,
   PREFLIGHT_FRESH,
@@ -487,6 +489,12 @@ export interface HelloResult {
    * means "a build that computes no Surface"**, never version 0.
    */
   readonly surfaceVersion?: number;
+  /**
+   * That member's frame declaration (`frames.toml`). Set only when it sent one that holds. **Absent
+   * means "nothing declared"**: the phone reads that member's panes in the harness's own frame.
+   * Re-checked field by field (`frameDeclarationsFrom`) because the lead republishes it.
+   */
+  readonly frames?: FrameDeclarations;
 }
 
 export interface PeerClientDeps {
@@ -672,6 +680,8 @@ export class PeerClient {
     const sessions = parseSessionCards(outcome.value);
     // M56 spec 09's reader version, read the same absent-means-closed way as `version`.
     const surfaceVersion = parseSurfaceVersion(outcome.value);
+    // The frame declaration, read the same absent-means-nothing way, and bounded: the lead republishes it.
+    const frames = frameDeclarationsFrom(asRecord(outcome.value)?.[CREW_FRAMES_FIELD], "wire");
     const value: HelloResult = {
       protocol,
       member,
@@ -684,7 +694,8 @@ export class PeerClient {
     };
     // Assigned only when sent, so a member that sends none reads exactly as it did before M55.
     const withCards = sessions === null ? value : { ...value, sessions };
-    return { ...outcome, value: surfaceVersion === null ? withCards : { ...withCards, surfaceVersion } };
+    const withSurface = surfaceVersion === null ? withCards : { ...withCards, surfaceVersion };
+    return { ...outcome, value: frames === undefined ? withSurface : { ...withSurface, frames } };
   }
 
   /**

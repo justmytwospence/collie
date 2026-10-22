@@ -5181,6 +5181,176 @@
    "version": "1.3.0",
    "state": "dialog"
   },
+  "pi--v130-frames-idle.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "idle",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-draft.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "draft",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-widget.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "idle",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-sandbox-idle.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "idle",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-sandbox-draft.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "draft",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-question.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "dialog",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-question-moved.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "dialog",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-multi.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "dialog",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-multi-checked.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "dialog",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
+  "pi--v130-frames-multi-two.txt": {
+   "harness": "pi",
+   "version": "1.3.0",
+   "state": "dialog",
+   "frames": {
+    "pi": {
+     "ruleGlyphs": "━",
+     "ruleLabels": "ends",
+     "statusRows": 12,
+     "statusIndent": 1,
+     "statusBlankRows": 1,
+     "optionGutter": "│",
+     "checkboxTicks": "✓",
+     "typedAnswer": "Other"
+    }
+   }
+  },
   "pi--v130-slash-model-list--w120.txt": {
    "harness": "pi",
    "version": "1.3.0",

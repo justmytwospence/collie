@@ -13,6 +13,8 @@ import type { IdleProfile } from "../lib/surface/frame";
 import { surfaceOfScreen, type SurfaceRead } from "../lib/surface/fold";
 import { liftAsk, legacyFree, readerBlocks } from "../lib/surface/lift";
 import { loadProfiles } from "../lib/surface/profile";
+import { withFrameDeclaration } from "../lib/surface/frame-declarations";
+import type { FrameDeclarations } from "../lib/frame-declarations";
 
 export const FIXTURES_DIR = join(import.meta.dirname, "..", "fixtures");
 export const PANES_DIR = join(FIXTURES_DIR, "panes");
@@ -50,6 +52,11 @@ export interface FixtureLabel {
   readonly harness: string;
   readonly version: string;
   readonly state: FixtureState;
+  /**
+   * The operator's frame declaration the screen was drawn under (`frames.toml`, wire spelling), for a
+   * capture of a harness whose extensions redraw its box. Its readers and its profile take it.
+   */
+  readonly frames?: FrameDeclarations;
 }
 
 export interface SyntheticScreen {
@@ -115,18 +122,21 @@ export function fixtureRows(name: string, dir = PANES_DIR): StyledLine[] {
 }
 
 /** The profile `idle` block for a harness, or null when it has none. */
-export function idleFor(harness: string): IdleProfile | null {
-  return loadProfiles().get(harness)?.idle ?? null;
+export function idleFor(harness: string, frames?: FrameDeclarations): IdleProfile | null {
+  const profile = loadProfiles().get(harness);
+  return profile === undefined ? null : withFrameDeclaration(profile, frames).idle;
 }
 
 export interface ReadOptions {
   /** False reads with the generic cues alone: no block reader lifts an ask. */
   readonly lift?: boolean;
+  /** The frame declaration the block readers take, as the bridge's own (surface/profile.ts `declareFrames`). */
+  readonly frames?: FrameDeclarations;
 }
 
 /** One screen through the shadow's pipeline: the readers lift, the fold reads. */
 export function readScreen(rows: StyledLine[], agent: string | undefined, idle: IdleProfile | null, options: ReadOptions = {}): SurfaceRead {
-  const ask = options.lift === false ? null : liftAsk(readerBlocks(rows, agent), 1);
+  const ask = options.lift === false ? null : liftAsk(readerBlocks(rows, agent, options.frames), 1);
   return surfaceOfScreen({ seq: 1, source: "screen", at: 0, revision: 1, rows, ask }, idle);
 }
 

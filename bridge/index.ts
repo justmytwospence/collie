@@ -1,3 +1,5 @@
+import { readFrameDeclarations } from "./operator-frames.ts";
+import { declareFrames } from "../web/src/lib/surface/profile.ts";
 import { existsSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import { mkdir, readFile as readFileAsync, realpath as realpathAsync, stat as statAsync, statfs as statfsAsync, writeFile } from "node:fs/promises";
 import { cpus, freemem, homedir, hostname, loadavg, totalmem } from "node:os";
@@ -307,6 +309,13 @@ try {
   console.error(`[bridge] FATAL: ${err instanceof Error ? err.message : String(err)}`);
   process.exit(1);
 }
+
+// The operator's frame declaration (`frames.toml`): how this machine's extensions draw a harness's
+// input box. Applied to the surface profiles before the first read, served on `/api/config` and sent
+// in `hello`. A missing or broken file is nothing declared, with a warning for the broken one.
+const frames = readFrameDeclarations(cfg.framesFile);
+declareFrames(frames);
+if (frames !== undefined) console.log(`[bridge] frames: ${Object.keys(frames).join(", ")} declared in ${cfg.framesFile}`);
 
 // The durable programs this Collie runs beside its terminal mux (M55, bridge/sources.ts): each entry of
 // `sources.json` is one more session. A missing file is none, and nothing below changes; a file that is

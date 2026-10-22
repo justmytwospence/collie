@@ -12,7 +12,7 @@ import {
   readScreen,
   rowsOf,
 } from "./surface-corpus";
-import { findInputFrame } from "../lib/surface/frame";
+import { findInputFrame, type IdleProfile } from "../lib/surface/frame";
 import { requireProfile } from "../lib/surface/profile";
 import { type Ask, askOf, isFree, modalWord, type Surface } from "../lib/surface/surface";
 
@@ -54,7 +54,7 @@ export function labelOf(name: string) {
 /** A fixture read the way the shadow reads it: its harness's own profile, the readers lifting. */
 export function own(name: string) {
   const label = labelOf(name);
-  return readScreen(fixtureRows(name), agentOf(label.harness), idleFor(label.harness));
+  return readScreen(fixtureRows(name), agentOf(label.harness), idleFor(label.harness, label.frames), { frames: label.frames });
 }
 
 /**
@@ -162,7 +162,12 @@ export function profileSuite({ id, idleMin, quote, states }: ProfileCase): void 
   // not describe must never make a dialog free either.
   const PROFILE = requireProfile(id).idle;
   const mine = FIXTURES.filter((name) => labelOf(name).harness === id);
-  const read = (name: string, idle = PROFILE) => readScreen(fixtureRows(name), agentOf(labelOf(name).harness), idle);
+  // A fixture drawn under a frame declaration is read the way its machine's bridge reads it: with the
+  // declaration applied to this profile and handed to the readers.
+  const read = (name: string, idle?: IdleProfile) => {
+    const frames = labelOf(name).frames;
+    return readScreen(fixtureRows(name), agentOf(labelOf(name).harness), idle ?? (frames === undefined ? PROFILE : idleFor(id, frames)), { frames });
+  };
 
   it(`${id}: the set holds idle, draft, running and dialog screens`, () => {
     const have = new Set<string>(mine.map((name) => labelOf(name).state));
@@ -173,7 +178,7 @@ export function profileSuite({ id, idleMin, quote, states }: ProfileCase): void 
     const idle = mine.filter((name) => labelOf(name).state === "idle");
     expect(idle.length).toBeGreaterThanOrEqual(idleMin);
     for (const name of idle) {
-      expect(findInputFrame(fixtureRows(name), PROFILE), name).not.toBeNull();
+      expect(findInputFrame(fixtureRows(name), idleFor(id, labelOf(name).frames) ?? PROFILE), name).not.toBeNull();
       expect(isFree(read(name).surface), name).toBe(true);
     }
   });

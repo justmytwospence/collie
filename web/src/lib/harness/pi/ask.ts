@@ -62,11 +62,10 @@ import type { PromptFeedback, PromptModel, PromptOption } from "../prompt-model"
 import type { WizardAnswer, WizardModel, WizardStepChip } from "../wizard-model";
 import { locateComposer, MAX_PICKER_HEADER_ROWS, paintedStatus, ruleAbove, tailRule } from "./composer";
 import { keyHintPairs, listDialogHint, parsePiFooter, type PiFooter } from "./footer";
+import { DEFAULT_PI_FRAMES, ruleRunColor, type PiFrames } from "./frames";
 
 /** A full-width rule: pi's editor rules and every question extension's own top and bottom rule. */
-const RULE = /^─{8,}$/;
 /** Status rows pi paints under its editor: stock 2 (cwd, stats), OmO 3, the PR 397 powerbar 1. */
-const MAX_STATUS_ROWS = 4;
 /** A narrow pane wraps the footer; the PR 397 capture at 50 columns needs two rows. */
 const MAX_FOOTER_ROWS = 3;
 /** How far up the top rule may be. The bound keeps a scan out of scrollback. */
@@ -106,8 +105,17 @@ function styledRow(line: StyledLine): boolean {
   return line.segments.some((s) => s.text.trim() !== "" && (s.fg !== undefined || s.muted));
 }
 
-function ruleColor(line: StyledLine): string | undefined {
-  return line.segments.find((s) => s.text.trim() !== "")?.fg;
+function ruleColor(line: StyledLine, frames: PiFrames): string | undefined {
+  return ruleRunColor(line.segments, frames);
+}
+
+/** The two rules bound one frame: the same text in the same colour, or, for a declared frame whose
+ *  rules may carry a gauge or a label (frames.ts), the same width and the same rule colour. */
+function sameFrame(lines: StyledLine[], texts: string[], top: number, bottom: number, frames: PiFrames): boolean {
+  const matching = frames.declared
+    ? frames.width(lines[top]!.segments) === frames.width(lines[bottom]!.segments)
+    : texts[top] === texts[bottom];
+  return matching && ruleColor(lines[top]!, frames) === ruleColor(lines[bottom]!, frames);
 }
 
 /**
@@ -123,15 +131,24 @@ function ruleColor(line: StyledLine): string | undefined {
  * may be plain. A plain row straight under the frame is output written after it, such as the shell
  * prompt after pi exited (pi--prose-quoted-dialog-then-shell.txt).
  */
-function statusTailBottom(lines: StyledLine[], texts: string[], end: number): number | null {
-  if (end >= 0 && RULE.test(texts[end]!)) {
-    return ruleAbove(texts, end, texts[end]!.length, MAX_BODY_ROWS) >= 0 ? end : null;
+function statusTailBottom(lines: StyledLine[], texts: string[], end: number, frames: PiFrames): number | null {
+  if (end >= 0 && frames.edge(texts[end]!)) {
+    const widths = lines.map((line) => frames.width(line.segments));
+    return ruleAbove(texts, end, widths[end]!, MAX_BODY_ROWS, frames, widths) >= 0 ? end : null;
   }
   let bottom = end;
-  while (bottom >= 0 && end - bottom <= MAX_STATUS_ROWS && !RULE.test(texts[bottom]!)) bottom--;
-  if (bottom < 0 || !RULE.test(texts[bottom]!) || end - bottom > MAX_STATUS_ROWS) return null;
+  while (bottom >= 0 && end - bottom <= frames.statusRows && !frames.edge(texts[bottom]!)) bottom--;
+  if (bottom < 0 || !frames.edge(texts[bottom]!) || end - bottom > frames.statusRows) return null;
   for (let i = bottom + 1; i <= end; i++) {
-    if (/^\s*─{3,}/.test(texts[i]!)) return null;
+    if (frames.ruleStart(texts[i]!)) return null;
+  }
+  // A declared frame's taller status area keeps the shape it was declared with, as under the editor
+  // (composer.ts `statusRow`): no row indented further, and no more blank rows. Otherwise a picker's
+  // list under its own rule would pass for status rows.
+  if (frames.declared) {
+    const rows = texts.slice(bottom + 1, end + 1);
+    if (rows.some((row) => row !== "" && row.length - row.trimStart().length > frames.statusIndent)) return null;
+    if (rows.filter((row) => row === "").length > frames.statusBlankRows) return null;
   }
   return paintedStatus(lines.slice(bottom + 1, end + 1)) ? bottom : null;
 }
@@ -153,15 +170,15 @@ function footerAt(lines: StyledLine[], texts: string[], footerEnd: number): { st
 /** Read the frame at the tail of `lines`, or null. Says nothing yet about what is inside it. A frame
  *  whose bottom rule is off the screen is read too, as an open frame (`openFrameTop`), when its
  *  footer is still on the screen. */
-export function readPiFrame(lines: StyledLine[]): PiFrame | null {
+export function readPiFrame(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): PiFrame | null {
   const texts = lines.map((l) => lineText(l).trimEnd());
   let end = texts.length - 1;
   while (end >= 0 && texts[end] === "") end--;
   if (end < 0) return null;
 
-  const bottom = statusTailBottom(lines, texts, end);
+  const bottom = statusTailBottom(lines, texts, end, frames);
   if (bottom === null) {
-    const top = openFrameTop(lines, texts, end);
+    const top = openFrameTop(lines, texts, end, frames);
     if (top === null) return null;
     // The footer ends at the screen's last row: the rows under it are what the pane cut off.
     const best = footerAt(lines, texts, end);
@@ -180,11 +197,11 @@ export function readPiFrame(lines: StyledLine[]): PiFrame | null {
   // An indented rule is an inline editor's border (` ────`, pi--v110-single-editor-open.txt) and is
   // passed over here; the rows it sits in are judged by the reader, not by the frame.
   let top = best.start - 1;
-  while (top >= 0 && !RULE.test(texts[top]!)) {
+  while (top >= 0 && !frames.edge(texts[top]!)) {
     if (best.start - top > MAX_BODY_ROWS) return null;
     top--;
   }
-  if (top < 0 || texts[top] !== texts[bottom] || ruleColor(lines[top]!) !== ruleColor(lines[bottom]!)) return null;
+  if (top < 0 || !sameFrame(lines, texts, top, bottom, frames)) return null;
   return { top, bottom, open: false, footerStart: best.start, footerEnd, footer: best.footer, texts };
 }
 
@@ -206,17 +223,17 @@ export function readPiFrame(lines: StyledLine[]): PiFrame | null {
  * stays prose: while pi runs its editor and status rows are at the tail, and after it exits the shell
  * prompt is, so neither screen ends inside a frame.
  */
-export function openFrameTop(lines: StyledLine[], texts: string[], end: number): number | null {
-  if (end < 1 || tailRule(lines) !== null || statusTailBottom(lines, texts, end) !== null) return null;
+export function openFrameTop(lines: StyledLine[], texts: string[], end: number, frames: PiFrames = DEFAULT_PI_FRAMES): number | null {
+  if (end < 1 || tailRule(lines, frames) !== null || statusTailBottom(lines, texts, end, frames) !== null) return null;
   let top = end;
-  while (top >= 0 && end - top <= MAX_BODY_ROWS && !RULE.test(texts[top]!)) {
-    if (/^\s*─/.test(texts[top]!)) return null;
+  while (top >= 0 && end - top <= MAX_BODY_ROWS && !frames.edge(texts[top]!)) {
+    if (frames.ruleGlyphStart(texts[top]!)) return null;
     top--;
   }
-  if (top < 0 || !RULE.test(texts[top]!) || top === end) return null;
-  const width = texts[top]!.length;
-  for (let r = top + 1; r <= end; r++) if (texts[r]!.length > width) return null;
-  return openDialog(lines, texts, top, end) || openPicker(lines, texts, top, end) ? top : null;
+  if (top < 0 || !frames.edge(texts[top]!) || top === end) return null;
+  const width = frames.width(lines[top]!.segments);
+  for (let r = top + 1; r <= end; r++) if (frames.width(lines[r]!.segments) > width) return null;
+  return openDialog(lines, texts, top, end) || openPicker(lines, texts, top, end, frames) ? top : null;
 }
 
 /** Shape (a) of `openFrameTop`: a dialog's title under its top rule, then dialog rows to the end. */
@@ -235,9 +252,10 @@ function openDialog(lines: StyledLine[], texts: string[], top: number, end: numb
 }
 
 /** Shape (b) of `openFrameTop`: a picker's key-hint row over its inner rule, no editor under it. */
-function openPicker(lines: StyledLine[], texts: string[], top: number, end: number): boolean {
+function openPicker(lines: StyledLine[], texts: string[], top: number, end: number, frames: PiFrames): boolean {
   for (let r = top + 1; r <= end; r++) if (texts[r]!.startsWith("❯")) return false;
-  const header = ruleAbove(texts, top, texts[top]!.length, MAX_PICKER_HEADER_ROWS + 1);
+  const widths = lines.map((line) => frames.width(line.segments));
+  const header = ruleAbove(texts, top, widths[top]!, MAX_PICKER_HEADER_ROWS + 1, frames, widths);
   if (header < 0) return false;
   for (let r = header + 1; r < top; r++) {
     if (paintedRow(lines[r]!) && (keyHintPairs(texts[r]!) >= 2 || listDialogHint(texts[r]!))) return true;
@@ -250,13 +268,13 @@ function openPicker(lines: StyledLine[], texts: string[], top: number, end: numb
  * rule-bounded frame at the tail whose footer names an Escape key, or a picker's key-hint row. A
  * composer prints neither, so a live editor never answers true.
  */
-export function piModalOnScreen(lines: StyledLine[]): boolean {
-  if (readPiFrame(lines)?.footer.escapeVerb != null) return true;
-  if (pickerOnScreen(lines)) return true;
+export function piModalOnScreen(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): boolean {
+  if (readPiFrame(lines, frames)?.footer.escapeVerb != null) return true;
+  if (pickerOnScreen(lines, frames)) return true;
   const texts = lines.map((l) => lineText(l).trimEnd());
   let end = texts.length - 1;
   while (end >= 0 && texts[end] === "") end--;
-  return openFrameTop(lines, texts, end) !== null;
+  return openFrameTop(lines, texts, end, frames) !== null;
 }
 
 
@@ -275,9 +293,9 @@ const MAX_BANNER_ROWS = 8;
  *     `? Question pending (N unanswered)`;
  *   - no blank row between it and the top rule: the banner stands on the editor as one block.
  */
-export function piQuestionBanner(lines: StyledLine[]): boolean {
-  const editor = locateComposer(lines);
-  if (editor === null || piModalOnScreen(lines)) return false;
+export function piQuestionBanner(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): boolean {
+  const editor = locateComposer(lines, frames);
+  if (editor === null || piModalOnScreen(lines, frames)) return false;
   for (let r = editor.top - 1; r >= 0 && editor.top - r <= MAX_BANNER_ROWS; r--) {
     const text = lineText(lines[r]!).trimEnd();
     if (text === "") return false;
@@ -306,26 +324,27 @@ function paintedRow(line: StyledLine): boolean {
  *     stock editor's rows are the draft too, and typed text is never painted.
  * Read for the card's evidence only; nothing is lifted from it.
  */
-function pickerOnScreen(lines: StyledLine[]): boolean {
+function pickerOnScreen(lines: StyledLine[], frames: PiFrames): boolean {
   const texts = lines.map((l) => lineText(l).trimEnd());
   let end = texts.length - 1;
   while (end >= 0 && texts[end] === "") end--;
-  const bottom = statusTailBottom(lines, texts, end);
+  const bottom = statusTailBottom(lines, texts, end, frames);
   if (bottom === null || bottom < 1) return false;
-  const editor = locateComposer(lines);
+  const editor = locateComposer(lines, frames);
   if (editor?.layout === "omo") return false;
-  const width = texts[bottom]!.length;
+  const widths = lines.map((line) => frames.width(line.segments));
+  const width = widths[bottom]!;
   const hintIn = (from: number, to: number): boolean => {
     for (let r = from; r < to; r++) {
       if (paintedRow(lines[r]!) && (keyHintPairs(texts[r]!) >= 2 || listDialogHint(texts[r]!))) return true;
     }
     return false;
   };
-  const top = ruleAbove(texts, bottom, width, MAX_BODY_ROWS);
+  const top = ruleAbove(texts, bottom, width, MAX_BODY_ROWS, frames, widths);
   if (top < 0) return false;
   if (hintIn(top + 1, bottom)) return true;
   if (editor !== null) return false;
-  const header = ruleAbove(texts, top, width, MAX_PICKER_HEADER_ROWS + 1);
+  const header = ruleAbove(texts, top, width, MAX_PICKER_HEADER_ROWS + 1, frames, widths);
   return header >= 0 && hintIn(header + 1, top);
 }
 
@@ -362,8 +381,8 @@ export type PiQuestion =
 /**
  * Detect a pi-family question screen at the tail of `lines` and the block it lifts as, or null.
  */
-export function detectPiQuestion(lines: StyledLine[]): PiQuestion | null {
-  const frame = readPiFrame(lines);
+export function detectPiQuestion(lines: StyledLine[], frames: PiFrames = DEFAULT_PI_FRAMES): PiQuestion | null {
+  const frame = readPiFrame(lines, frames);
   if (frame === null) return null;
   const { texts, top, bottom, footer } = frame;
   if (footer.escapeVerb === null) return null;
@@ -409,7 +428,7 @@ export function detectPiQuestion(lines: StyledLine[]): PiQuestion | null {
     return strip === null ? null : readSubmitPage(frame, header, strip, signature);
   }
 
-  const options = numbered ? readOptions(texts, at, bodyEnd, pointerCol) : readUnnumbered(texts, at, bodyEnd);
+  const options = numbered ? readOptions(texts, at, bodyEnd, pointerCol, frames) : readUnnumbered(texts, at, bodyEnd);
   if (options === null) return null;
   // Trailer rows: blank, or at most two header-like rows that are not a rule or an editor. Only OmO's
   // numbered dialog prints one; under unnumbered rows a header-like row is a label wrapped back to
@@ -523,7 +542,10 @@ function readOptions(
   start: number,
   end: number,
   col: 0 | 1,
+  frames: PiFrames,
 ): { rows: OptionRow[]; end: number } | null {
+  // A declared gutter (frames.ts `optionGutter`): the wrapped rest of a choice behind it, one space in.
+  const gutterRow = frames.optionGutter === null ? null : new RegExp(`^ ${escapeRegExp(frames.optionGutter)} +(\\S.*)$`, "u");
   const rows: OptionRow[] = [];
   let boxed: boolean | null = null;
   let labelCol = 0;
@@ -559,6 +581,14 @@ function readOptions(
     }
     // A description row: exactly the label's column, under a choice (never under the free-text row).
     const owner = rows.at(-1);
+    // The wrapped rest of a choice behind the declared one-column gutter (` │    rest`), when the
+    // operator's frame has one: an extension that keeps a description on the label's row draws it so.
+    const gutter = gutterRow?.exec(t) ?? null;
+    if (gutter !== null && owner !== undefined && !owner.freeText) {
+      if (owner.description === undefined) owner.label = `${owner.label} ${gutter[1]!}`;
+      else owner.description = `${owner.description} ${gutter[1]!}`;
+      continue;
+    }
     const desc = new RegExp(`^ {${labelCol}}(\\S.*)$`).exec(t);
     if (desc !== null && owner !== undefined && !owner.freeText) {
       owner.description = owner.description === undefined ? desc[1]! : `${owner.description} ${desc[1]!}`;
