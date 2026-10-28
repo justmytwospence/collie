@@ -1,10 +1,11 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 import { fetchConfig } from "@/lib/api";
+import type { FrameDeclarations } from "@/lib/frame-declarations";
 import { acceptOperatorFonts, applyOperatorFonts, type OperatorFontFace } from "@/lib/operator-fonts";
 import { designPrefs, subscribeDesign } from "@/lib/design";
 import { getDeviceToken, subscribePairing } from "@/lib/pairing";
-import { normalizeScope, scopeKey, type Scope } from "@/lib/scope";
+import { normalizeHost, normalizeScope, scopeKey, type Scope } from "@/lib/scope";
 import type {
   MuxConfig,
   OperatorCommand,
@@ -68,6 +69,9 @@ let currentUpload: UploadCapability | null = null;
 // Unlike the rest of this store it moves at runtime: the setup tap starts a download and the poll
 // reports it, so `noteWhistleStatus` (below) writes the newest answer back.
 let currentWhistle: WhistleStatus | null = null;
+// The lead's own frame declaration (`frames.toml`), or undefined: nothing declared, and also no read
+// yet. Both mean the harness's own frame, which is how every pane was read before the field existed.
+let currentFrames: FrameDeclarations | undefined;
 let inflight: Promise<void> | null = null;
 // Bumped by the test reset. A read that started before a reset and answers after it must not write
 // into the fresh state: its answer is the previous case's `/api/config`, and it would land on top of
@@ -112,6 +116,7 @@ export function loadOperatorCommands(): Promise<void> {
       currentStt = cfg.stt ?? null;
       currentUpload = cfg.upload ?? null;
       currentWhistle = cfg.whistle ?? null;
+      currentFrames = cfg.frames;
       loaded = true;
       everLoaded = true;
       emit();
@@ -182,6 +187,7 @@ export function getMuxConfig(): MuxConfig | null {
 //    tries again.
 
 const hostMux = new Map<string, MuxConfig | null>();
+const hostFrames = new Map<string, FrameDeclarations | undefined>();
 const hostMuxInflight = new Map<string, Promise<void>>();
 
 /**
@@ -198,6 +204,8 @@ export function loadHostMuxConfig(host: string): Promise<void> {
       // member's machine-wide answer is never filed under one of its sessions.
       const cfg = await fetchConfig({ host });
       hostMux.set(host, cfg.mux ?? null);
+      // That member's own frame declaration: its extensions draw its panes' boxes. Never the lead's.
+      hostFrames.set(host, cfg.frames);
       emit();
     } catch {
       // Additive feature — see the header. Nothing is cached, so a later mount asks again.
@@ -306,6 +314,29 @@ export function initOperatorFonts(): void {
   subscribeDesign(() => applyOperatorFonts(currentFonts, designPrefs().font));
 }
 
+/**
+ * The frame declaration for the panes of one machine (`frames.toml`, lib/frame-declarations.ts): the
+ * lead's own with no host, a member's own from `/api/config?host=`. Undefined until that read answers,
+ * for a machine that declares nothing, and on a bridge older than the field. All three read the panes
+ * in the harness's own frame, as before. Never the lead's for a member: a member's extensions draw its
+ * own boxes. Outside React, for the dialog guard; components use {@link useFrames}.
+ */
+export function getFrames(host?: string): FrameDeclarations | undefined {
+  const at = normalizeHost(host);
+  return at === undefined ? currentFrames : hostFrames.get(at);
+}
+
+/** Reactive read of {@link getFrames} for one scope's machine, kicking its config read on mount. */
+export function useFrames(scope?: Scope): FrameDeclarations | undefined {
+  const host = normalizeHost(scope?.host);
+  useEffect(() => {
+    void loadOperatorCommands();
+    if (host !== undefined) void loadHostMuxConfig(host);
+  }, [host]);
+  // Both getters answer stored objects, so the snapshot is referentially stable between reads.
+  return useSyncExternalStore(subscribeOperatorConfig, () => getFrames(host), () => getFrames(host));
+}
+
 export function subscribeOperatorConfig(cb: () => void): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
@@ -362,6 +393,7 @@ export function useOperatorQuickReplies(): readonly OperatorQuickReplyRow[] {
 export function __resetOperatorCommands(): void {
   hostMux.clear();
   hostMuxInflight.clear();
+  hostFrames.clear();
   sessionMux.clear();
   sessionMuxInflight.clear();
   current = [];
@@ -372,6 +404,7 @@ export function __resetOperatorCommands(): void {
   currentStt = null;
   currentWhistle = null;
   currentUpload = null;
+  currentFrames = undefined;
   inflight = null;
   generation++;
   loaded = false;

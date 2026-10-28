@@ -232,6 +232,21 @@ describe("GET /crew/v1/hello — behind both factors", () => {
     expect(Object.hasOwn(await again.json(), "surfaceVersion")).toBe(false);
   });
 
+  test("a machine with a frame declaration sends it; one with none sends no key", async () => {
+    const h = harness(leadStore({ peers: [nas] }));
+    const frames = { pi: { ruleGlyphs: "━", statusRows: 8 } };
+    const declared = createCrewRouter({ store: h.store, audit: h.audit, now: () => T0, mux: () => null, frames: () => frames });
+    const res = (await call(declared, CREW_HELLO_PATH, {
+      headers: { ...authed, ...signed("nas", "GET", CREW_HELLO_PATH, "", T0) },
+    }))!;
+    expect(await res.json()).toEqual({ protocol: 2, member: "desk", frames });
+    const plain = createCrewRouter({ store: h.store, audit: h.audit, now: () => T0, mux: () => null, frames: () => undefined });
+    const again = (await call(plain, CREW_HELLO_PATH, {
+      headers: { ...authed, ...signed("nas", "GET", CREW_HELLO_PATH, "", T0 + 1) },
+    }))!;
+    expect(Object.hasOwn(await again.json(), "frames")).toBe(false);
+  });
+
   test("a router built without a version simply omits the field — absent, never empty (§7.1)", async () => {
     // The optional field's own absent-means-closed rule, applied to the responder: nothing sends
     // `"version": null` or `""`, because a prober reads absence as "older than the amendment" and a

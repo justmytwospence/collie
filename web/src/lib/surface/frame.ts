@@ -255,7 +255,9 @@ function paintedFooter(rows: readonly FrameRow[], texts: readonly string[], bott
   let end = texts.length;
   while (end > first && isBlank(texts[end - 1]!)) end--;
   if (end <= first || end - first > idle.volatile.below.maxRows || !paintedRow(rows[first]!)) return false;
-  for (let j = first; j < end; j++) if (isBlank(texts[j]!)) return false;
+  // A blank row ends the footer, unless the profile lets the footer hold some (`underBlankRows`).
+  let blanks = 0;
+  for (let j = first; j < end; j++) if (isBlank(texts[j]!) && ++blanks > (idle.frame.underBlankRows ?? 0)) return false;
   return true;
 }
 
@@ -305,6 +307,22 @@ function holeIsFaint(rows: readonly FrameRow[], prompt: number, holeStart: numbe
   return flag !== null && holeEvery(rows, prompt, holeStart, last, (run) => run[flag] === true);
 }
 
+/**
+ * Whether a box is drawn in the placeholder's attribute as a whole: every visible character of one of
+ * its edge rows carries it. An extension that dims the panel which does not have the keys dims every
+ * cell of it, the box's rules and the draft with the rest (`idle.splitPanels`), and a draft in a box
+ * dimmed so is not a placeholder. False on a profile that declares no panel, so no other box is read
+ * differently.
+ */
+function boxIsFaint(rows: readonly FrameRow[], edges: readonly number[], idle: IdleProfile): boolean {
+  const flag = idle.splitPanels === undefined ? null : sgrFlag(idle.placeholders.sgr);
+  if (flag === null) return false;
+  return edges.some((edge) => {
+    const visible = (rows[edge]?.segments ?? []).filter((run) => run.text.trim().length > 0);
+    return visible.length > 0 && visible.every((run) => run[flag] === true);
+  });
+}
+
 /** Whether every visible character in the draft hole is drawn in one of the placeholder's colours. */
 function holeIsGhostColoured(rows: readonly FrameRow[], prompt: number, holeStart: number, last: number, colours: ReadonlySet<string> | null): boolean {
   return colours !== null && holeEvery(rows, prompt, holeStart, last, (run) => run.fg !== undefined && colours.has(run.fg));
@@ -320,7 +338,8 @@ function isPlaceholderText(text: string, idle: IdleProfile): boolean {
 /**
  * Whether the hole shows the profile's placeholder, by its text, its attribute or its colours; each
  * way that holds adds its anchor to `anchorsHit`. The three tests are whole-hole: one visible run
- * that is neither faint nor ghost-coloured leaves the text a draft.
+ * that is neither faint nor ghost-coloured leaves the text a draft. `edges` are the box's edge rows:
+ * a box faint as a whole (`boxIsFaint`) shows no placeholder by its attribute.
  */
 function readPlaceholder(
   rows: readonly FrameRow[],
@@ -331,9 +350,10 @@ function readPlaceholder(
   idle: IdleProfile,
   colours: ReadonlySet<string> | null,
   anchorsHit: FrameAnchorHit[],
+  edges: readonly number[],
 ): boolean {
   const byText = isPlaceholderText(text, idle);
-  const bySgr = holeIsFaint(rows, prompt, holeStart, last, idle.placeholders.sgr);
+  const bySgr = holeIsFaint(rows, prompt, holeStart, last, idle.placeholders.sgr) && !boxIsFaint(rows, edges, idle);
   const byFg = holeIsGhostColoured(rows, prompt, holeStart, last, colours);
   if (byText) anchorsHit.push("placeholder-text");
   if (bySgr) anchorsHit.push("placeholder-sgr");
@@ -616,7 +636,7 @@ export function frameAt(rows: readonly FrameRow[], bottom: number, idle: IdlePro
   const text = draftText(rows, texts, pieces, c.hint);
   anchorsHit.push("bottom");
 
-  const placeholder = readPlaceholder(rows, prompt, holeStart, bottom - 1, text, idle, c.placeholderFg, anchorsHit);
+  const placeholder = readPlaceholder(rows, prompt, holeStart, bottom - 1, text, idle, c.placeholderFg, anchorsHit, [top, bottom]);
 
   let end = texts.length;
   while (end > bottom + 1 && isBlank(texts[end - 1]!)) end--;
@@ -744,7 +764,7 @@ function interiorFrameAt(rows: readonly FrameRow[], bottom: number, idle: IdlePr
   anchorsHit.push("prompt");
   if (hole !== undefined) anchorsHit.push("draft");
   anchorsHit.push("bottom");
-  const placeholder = readPlaceholder(rows, prompt, holeStart, last, text, idle, c.placeholderFg, anchorsHit);
+  const placeholder = readPlaceholder(rows, prompt, holeStart, last, text, idle, c.placeholderFg, anchorsHit, [top, bottom]);
 
   let end = texts.length;
   while (end > bottom + 1 && isBlank(texts[end - 1]!)) end--;

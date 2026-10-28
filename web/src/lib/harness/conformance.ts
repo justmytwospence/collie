@@ -56,7 +56,7 @@ import {
   splitWalk,
   type PromptModel,
 } from "./prompt-model";
-import { WALK_GAPS, WALK_PAIRS, walkGroupKey } from "./walk-pairs";
+import { WALK_GAPS, WALK_PAIRS, walkGroupKey, type WalkPair } from "./walk-pairs";
 // The bridge's own verifier, imported so the phone's `styledSignature` is checked against what the
 // bridge really computes from the same bytes (a web test may import the bridge's pure modules; the
 // bridge imports web/src/lib/styled-region.ts the other way, and neither pulls a cycle).
@@ -590,6 +590,10 @@ export function describeAdapterConformance(
      *  to "a region exists exactly when the composer is ready": the sweep goes out unbound there,
      *  and the list says so in the test output rather than in a silent null. */
     unboundComposerFixtures?: string[];
+    /** Walk pairs beyond {@link WALK_PAIRS} for its agent: an adapter built for an operator's frame
+     *  declaration (pi/frames.ts) brings the pairs of the captures drawn under it, which the agent's
+     *  own adapter does not lift and so must not be held to. */
+    extraWalkPairs?: readonly WalkPair[];
   },
 ): void {
   const { ownFixtures, foreignFixtures, neutralFixtures } = opts;
@@ -996,7 +1000,7 @@ export function describeAdapterConformance(
     // leaving its captures out of `ownFixtures`.
     describe("walk pairs (the pointer moves, the dialog does not)", () => {
       const walked = walkedFixtures(adapter);
-      const pairs = WALK_PAIRS.filter(([agent]) => agent === adapter.agent);
+      const pairs = [...WALK_PAIRS.filter(([agent]) => agent === adapter.agent), ...(opts.extraWalkPairs ?? [])];
 
       if (walked.size === 0) it.todo(`${adapter.agent}: lifts no walked pointer list from the corpus`);
       for (const [, nameA, nameB] of pairs) {

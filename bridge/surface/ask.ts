@@ -28,6 +28,7 @@ import type { AskReason, AskReceipt, AskReply, Answer, AskOutcome } from "../../
 import { surfaceOfScreen } from "../../web/src/lib/surface/fold.ts";
 import { rowText } from "../../web/src/lib/surface/frame.ts";
 import { askOfLift, liftDialog, readerBlocks, type LiftedDialog } from "../../web/src/lib/surface/lift.ts";
+import { agentRegion } from "../../web/src/lib/split-panel.ts";
 import type { ProfileMatch } from "../../web/src/lib/surface/profile.ts";
 import type { ReadMark } from "../../web/src/lib/surface/send.ts";
 import { askOf, shortHash, type Ask, type Surface } from "../../web/src/lib/surface/surface.ts";
@@ -879,14 +880,16 @@ export class AskAnswerer {
     const grid = await this.within(state, this.deps.mux.readGrid(paneId, { scope: "viewport", lines: ASK_READ_LINES, styling: "preserve" }), until, outcome);
     const gateRevision = this.deps.gate.noteRead(paneId);
     if (!grid.ok) return null;
-    const rows = splitLines(parseAnsi(grid.value.text));
+    const idle = state.match?.profile.idle ?? null;
+    // The harness's own region of the screen, when the operator declared a second panel beside or below
+    // it (`idle.splitPanels`): the dialog is lifted and the hash taken from the rows the harness drew.
+    const rows = agentRegion(splitLines(parseAnsi(grid.value.text)), idle?.splitPanels);
     const texts = rows.map((row) => rowText(row).trimEnd());
     this.deps.ring?.push({ requestId: state.answer.askId, step, at: this.now(), rows: texts });
     const dialog = liftDialog(readerBlocks(rows, harness));
     // Every read publishes what it lifted, like the poll does. The id being answered is spent, so even
     // the same dialog gets a new id here: a tap after a refusal carries the id of the screen it saw.
     const ask = this.publish(state, dialog);
-    const idle = state.match?.profile.idle ?? null;
     const { surface } = surfaceOfScreen({ seq: 0, source: "screen", at: this.now(), revision: grid.value.revision, rows, ask }, idle);
     return { revision: grid.value.revision, gateRevision, hash: shortHash(texts.join("\n")), texts, dialog, surface };
   }

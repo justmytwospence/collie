@@ -10,6 +10,8 @@
 // The agent string comes from the multiplexer and is passed through to the registry; this file names
 // no harness.
 
+import type { FrameDeclarations } from "../frame-declarations";
+import { declaredFrames } from "./profile";
 import type { Block, StyledLine } from "../blocks";
 import { buildBlocks } from "../harness/index";
 import { adapterFor } from "../harness/registry";
@@ -17,8 +19,10 @@ import { blockOwnsKeyboard, dialogModelOf, DIALOG_CONTRACT, type DialogKind } fr
 import { shortHash, type Ask, type AskKind, type AskOption } from "./surface";
 
 /** The blocks the phone would build for this screen: the agent's adapter, or one raw block. */
-export function readerBlocks(rows: StyledLine[], agent: string | undefined): Block[] {
-  return buildBlocks(rows, { agent });
+export function readerBlocks(rows: StyledLine[], agent: string | undefined, frames: FrameDeclarations | undefined = declaredFrames()): Block[] {
+  // The bridge's own machine's frame declaration by default, so its asks lift from the box its
+  // extensions draw.
+  return buildBlocks(rows, { agent, frames });
 }
 
 function options(labels: readonly string[]): AskOption[] {
@@ -134,7 +138,7 @@ export function liftAsk(blocks: readonly Block[], revision: number): Ask | null 
  * block owns the keyboard. An agent with no adapter, or an adapter that cannot tell, is not free.
  */
 export function legacyFree(rows: StyledLine[], blocks: readonly Block[], agent: string | undefined): boolean {
-  const adapter = adapterFor(agent);
+  const adapter = adapterFor(agent, declaredFrames());
   if (adapter?.composerReady === undefined) return false;
   let ready: boolean;
   try {

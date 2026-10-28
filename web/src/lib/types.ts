@@ -1,6 +1,7 @@
 // Frontend mirror of the bridge's domain model (bridge/types.ts). Kept as a small, deliberate
 // duplicate so the web app builds independently of the Bun server's source tree.
 
+import type { FrameDeclarations } from "@/lib/frame-declarations";
 import type { ApiErrorCode, ApiErrorDetail } from "@/lib/api-error-codes";
 import { t } from "@/lib/i18n";
 import type { HeldRow } from "@/lib/surface/send";
@@ -2223,6 +2224,13 @@ export interface BridgeConfig {
   operatorQuickReplies?: OperatorQuickReplyRow[];
   /** The operator's own UI typefaces. Absent when there is no `theme.toml` (ADR 0033). */
   operatorFonts?: OperatorFontRow[];
+  /**
+   * How the operator's extensions draw a harness's input box on THIS machine (`frames.toml`,
+   * web/src/lib/frame-declarations.ts), for the phone's harness readers of this machine's panes.
+   * Omitted when nothing is declared, which every reader takes as the harness's own frame. A `?host=`
+   * answer carries that member's own, from its `hello`, and never the lead's.
+   */
+  frames?: FrameDeclarations;
   /**
    * The multiplexer and its declared capabilities. **Absent on a bridge older than this field**, and
    * that absence is read as "everything is supported" — a mid-upgrade Herdr operator must never

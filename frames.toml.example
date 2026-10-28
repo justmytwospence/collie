@@ -1,0 +1,49 @@
+# How your extensions draw an agent's input box. This file goes next to your `.env`; docs/configure.md,
+# under "Your own slash commands", names that directory for each kind of install. On a Herdr plugin:
+#   cp frames.toml.example "$(herdr plugin config-dir herdr.collie)/frames.toml"
+#
+# WHEN YOU NEED IT. Collie finds an agent's input box by the shape the agent draws. An extension can
+# redraw that box: a gauge painted into its rules, a mode label at the end of a rule, a taller footer.
+# Then every send needs Type here, and a question shows only the Escape card. This file declares the
+# shape your extensions draw. pi is the only harness that reads one today.
+#
+# ONLY THESE LIMITS MOVE. Collie still wants the box's rules at the same width and in the same colour,
+# the box at the bottom of the screen, and the rows under it painted. Every key is optional; one you
+# leave out keeps pi's own shape. A key out of bounds is dropped with a line in the log.
+#
+# Collie reads this file once, at startup: run `collie restart` after an edit. In a crew each machine
+# reads its own and sends it to the lead, so each machine's panes are read with its own frame.
+
+[pi]
+# Glyphs a rule may be drawn with besides ─, for a gauge in the border. 1 to 8 box-drawing glyphs.
+rule_glyphs = "━"
+
+# "ends": a rule may carry a label before or after its run, such as ──── INSERT. pi's own: "middle".
+rule_labels = "ends"
+
+# Rows under the box's bottom rule (pi's own: 4, at most 16), how many columns in one may start
+# (pi's own: 0, at most 4), and blank rows between two of them (pi's own: 0, at most 2).
+status_rows = 12
+status_indent = 1
+status_blank_rows = 1
+
+# A question option that wraps continues behind this one-column gutter (` │    rest`). pi's own: none.
+option_gutter = "│"
+
+# Lift a lone checkbox question whose rows carry a tick column of these glyphs (`2. ✓ Green`), when its
+# footer names digits that select, Space that toggles and a Tab that is done. pi's own: none, so a
+# checkbox question stays raw.
+checkbox_ticks = "✓"
+
+# The checkbox question's typed-answer row starts with this label: it stays in the terminal.
+typed_answer = "Other"
+
+# A second panel an extension draws in the same pane, such as a side chat. Collie takes a box under
+# the agent's for the agent's own, and finds no box beside it. Declare the divider the extension
+# draws, and Collie reads only the agent's region: the rows above a `panel_below` divider, the
+# columns left of a `panel_beside` one. A divider is a row (or a column) of its `rule` glyph with
+# exactly one of its `pointers` in it, such as `──────▴──────`. A screen with no such divider is read
+# as before. Each takes both keys: `rule` is one box-drawing glyph, `pointers` 1 to 4 glyphs.
+# pi's own: none. Collie never reads which panel the pointer says has the keys.
+panel_below = { rule = "─", pointers = "▴▾" }
+panel_beside = { rule = "│", pointers = "◂▸" }

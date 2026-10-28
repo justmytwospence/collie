@@ -1,3 +1,4 @@
+import type { FrameDeclarations } from "../../web/src/lib/frame-declarations.ts";
 import type { AuditLog } from "../audit.ts";
 import type { JsonObject, JsonValue } from "../json.ts";
 import {
@@ -115,6 +116,14 @@ export const CREW_SESSIONS_FIELD = "sessions";
  * "a build that computes no Surface"**, never version 0, and it refuses nothing.
  */
 export const CREW_SURFACE_FIELD = "surfaceVersion";
+
+/**
+ * The OPTIONAL field a `hello` answer carries this machine's frame declaration on (`frames.toml`,
+ * web/src/lib/frame-declarations.ts): how its extensions draw a harness's input box, so the phone
+ * reads this machine's panes with it. **Absent means "nothing declared"**, the harness's own frame,
+ * and never the lead's: the lead's extensions draw only the lead's panes.
+ */
+export const CREW_FRAMES_FIELD = "frames";
 
 /**
  * The lead's REQUEST for a fresh preflight on the snapshot it is about to read (§19).
@@ -325,6 +334,8 @@ export interface CrewSurface {
   readonly sessions?: SessionCardSource;
   /** This collie's Surface reader version, for `hello` (M56 spec 09). Absent on a build that computes no Surface. */
   readonly surfaceVersion?: number | undefined;
+  /** This collie's frame declaration, for `hello`. Absent, or answering undefined, when nothing is declared. */
+  readonly frames?: () => FrameDeclarations | undefined;
 }
 
 /**
@@ -372,6 +383,8 @@ export interface CrewRouterDeps {
   readonly sessions?: SessionCardSource;
   /** Absent ⇒ `hello` carries no `surfaceVersion` (M56 spec 09). */
   readonly surfaceVersion?: number | undefined;
+  /** Absent, or answering undefined ⇒ `hello` carries no `frames`: nothing declared. */
+  readonly frames?: () => FrameDeclarations | undefined;
   /**
    * Whether the listener this handler is mounted on was built pin-enforcing
    * (`bridge/crew/transport.ts`). **Defaults to `false`, which admits nothing but a signed request.**
@@ -632,6 +645,8 @@ type HelloBody = {
   sessions?: SessionCard[];
   /** This peer's Surface reader version (M56 spec 09). See {@link CREW_SURFACE_FIELD}. */
   surfaceVersion?: number;
+  /** This peer's frame declaration. See {@link CREW_FRAMES_FIELD}. */
+  frames?: FrameDeclarations;
 };
 
 /**
@@ -1022,6 +1037,10 @@ export function createCrewRouter(deps: CrewRouterDeps): CrewHandler {
       // M56 spec 09: the reader version, one integer, so a lead can show a member's. Absent on a build
       // that computes no Surface; a number names no secret and is admissible for `version`'s reason.
       if (deps.surfaceVersion !== undefined) hello.surfaceVersion = deps.surfaceVersion;
+      // The frame declaration, only when the operator wrote one, so a peer without `frames.toml`
+      // sends the `hello` it always did. Settings, no path and no secret.
+      const frames = deps.frames?.();
+      if (frames !== undefined) hello.frames = frames;
       return new Response(JSON.stringify(hello), {
         status: 200,
         headers: crewResponseHeaders(verdict.self),
